@@ -1,7 +1,7 @@
 # ecs273-team08-CrimeForecast
 
 ##  Project Structure & Task Overview
-See `Implementation_Plan.md` 
+See [`Implementation_Plan.md` ](https://github.com/manami-bunbun/ecs273-team08-CrimeForecast/blob/main/Implementation_Plan.md)
 
 ## Description
 (Describe the repository in a few paragraphs)

@@ -72,6 +72,6 @@ web_app/
 ```
 requirements.txt               # Python dependencies for ML, API, and LLM
 README.md                      # Project overview, setup guide, usage instructions
-team_plan.md                   # Task allocation, milestones, and progress tracking
 Implementation_Plan.md         # This document: file structure and purpose overview
+.env (copy .env.example)
 ```

@@ -11,6 +11,18 @@ This project is structured into two main components:
 
 ---
 
+
+## 📁 data/
+
+```
+data/
+├── raw/                        # Original CSV files (e.g., SF crime data)
+├── processed/                  # Cleaned & feature-engineered datasets for ML
+└── external/                   # Event/context data for LLM input (e.g., news headlines)
+```
+
+---
+
 ## 📁 ml_evaluation/
 
 ```
@@ -52,16 +64,6 @@ web_app/
 │   └── style.css               # Styling for layout, components, and map
 ```
 
----
-
-## 📁 data/
-
-```
-data/
-├── raw/                        # Original CSV files (e.g., SF crime data)
-├── processed/                  # Cleaned & feature-engineered datasets for ML
-└── external/                   # Event/context data for LLM input (e.g., news headlines)
-```
 
 ---
 

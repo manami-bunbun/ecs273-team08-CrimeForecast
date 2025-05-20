@@ -33,8 +33,9 @@ deactivate
 
 ### Environment Variables
 Copy the .env.example template and fill in required values 
+```
 cp .env.example .env
-
+```
 
 
 

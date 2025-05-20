@@ -1,3 +1,35 @@
+# === Project-specific ===
+
+# ML output
+ml_evaluation/results/
+
+# Data files
+data/raw/
+data/processed/
+data/external/
+
+# LLM-generated files
+llm_cache/
+llm_output/
+
+# Saved models
+*.pkl
+*.joblib
+*.pt
+
+# Frontend build artifacts
+web_app/frontend/dist/
+web_app/frontend/build/
+
+# Local environment settings
+.env
+config.yaml
+config.json
+
+# ＝＝＝＝＝＝＝＝＝＝＝＝＝
+
+
+
 # Byte-compiled / optimized / DLL files
 __pycache__/
 *.py[cod]

@@ -66,7 +66,7 @@ class CSVViewer:
         else:
             print("No CSV data available")
 
-    def view_recent_incidents(self, n=5):""
+    def view_recent_incidents(self, n=5):
         if self.df is not None and len(self.df) > 0:
             if 'incident_datetime' in self.df.columns:
                 self.df['incident_datetime'] = self.df['incident_datetime'].apply(convert_datetime)

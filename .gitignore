@@ -4,9 +4,11 @@
 ml_evaluation/results/
 
 # Data files
-data/raw/
-data/processed/
-data/external/
+data/csv/*.csv
+data/csv/*.csv.gz
+data/mongodb/*
+!data/csv/.gitkeep
+!data/mongodb/.gitkeep
 
 # LLM-generated files
 llm_cache/

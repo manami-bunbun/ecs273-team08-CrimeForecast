@@ -16,10 +16,46 @@ This project is structured into two main components:
 
 ```
 data/
-├── raw/                        # Original CSV files (e.g., SF crime data)
-├── processed/                  # Cleaned & feature-engineered datasets for ML
-└── external/                   # Event/context data for LLM input (e.g., news headlines)
+├── csv/                        # Compressed CSV files of crime incidents
+│   └── sf_crime_YYYYMMDD_YYYYMMDD.csv.gz  # Date range in filename
+├── mongodb/                    # MongoDB data directory
+│  
+└── external/                  # External data sources for context
+   
 ```
+
+
+---
+
+## 📁 data_preprocessing/
+
+```
+data_preprocessing/
+├── crime_data_pipeline.py      # Main pipeline for fetching and processing crime data
+└── view_crime_data.py         # Utility for viewing processed crime data
+```
+
+### Setup and Usage
+
+1. **MongoDB Setup**
+   ```zsh
+   # Create MongoDB data directory
+   mkdir -p data/mongodb
+   
+   # Start MongoDB server (run in background)
+   mongod --dbpath data/mongodb &
+   ```
+
+2. **Data Pipeline Execution**
+   ```zsh
+   # Run the main data pipeline
+   python3 data_preprocessing/crime_data_pipeline.py
+   
+   # View processed data
+   python3 data_preprocessing/view_crime_data.py
+   ```
+
+
 
 ---
 

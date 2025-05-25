@@ -41,3 +41,12 @@ cp .env.example .env
 
 ## Execution
 
+### Data setup
+**Data Pipeline Execution**
+```zsh
+# Run the main data pipeline
+python3 data_preprocessing/crime_data_pipeline.py
+
+# View processed data
+python3 data_preprocessing/view_crime_data.py
+```

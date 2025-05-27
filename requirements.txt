@@ -7,3 +7,4 @@ matplotlib>=3.5.0
 contextily==1.6.2
 scikit-learn==1.6.1
 imblearn==0.0
+google-generative-ai==0.8.5

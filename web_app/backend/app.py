@@ -4,9 +4,16 @@ from typing import List, Optional
 from datetime import datetime
 import pandas as pd
 from pydantic import BaseModel
+from motor.motor_asyncio import AsyncIOMotorClient
 
 app = FastAPI()
 
+# MongoDB 
+MONGO_URL = "mongodb://localhost:27018"
+client = AsyncIOMotorClient(MONGO_URL)
+db = client.crime_forecast
+
+# CORS
 app.add_middleware(
     CORSMiddleware,
     allow_origins=["*"],

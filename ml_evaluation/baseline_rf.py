@@ -15,9 +15,34 @@ from sklearn.metrics import classification_report, confusion_matrix, accuracy_sc
 from imblearn.over_sampling import SMOTE
 from collections import Counter
 
+from sklearn.cluster import DBSCAN
+from sklearn.preprocessing import StandardScaler
+
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
 
+class DBSCANClusterer:
+    def __init__(self, eps=0.3, min_samples=10):
+        self.eps = eps
+        self.min_samples = min_samples
+        self.model = DBSCAN(eps=self.eps, min_samples=self.min_samples)
+    
+    def fit_predict(self, df, lat_col='latitude', lon_col='longitude'):
+        if lat_col not in df.columns or lon_col not in df.columns:
+            raise ValueError("Missing latitude or longitude columns in DataFrame.")
+
+        coords = df[[lat_col, lon_col]].dropna()
+        coords_scaled = StandardScaler().fit_transform(coords)
+
+        cluster_labels = self.model.fit_predict(coords_scaled)
+
+        # 預設所有 cluster_id 是 NaN，再補回對應 index 的 label
+        full_labels = pd.Series(np.nan, index=df.index)
+        full_labels[coords.index] = cluster_labels
+
+        df['cluster_id'] = full_labels
+        return df
+    
 class RandomForestPipeline:
     def __init__(self):
         csv_dir = os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__))), "data", "csv")
@@ -26,65 +51,20 @@ class RandomForestPipeline:
         if csv_files:
             self.csv_path = max(csv_files, key=os.path.getctime)
             logger.info(f"Using CSV file: {self.csv_path}")
+            
         else:
             raise FileNotFoundError("No CSV files found in data/csv directory")
 
         self.df = pd.read_csv(self.csv_path)
         logger.info("CSV file loaded successfully")
-
-    def categorize_crime_violent(self, category):
-        violent = {
-            'Assault', 'Robbery', 'Homicide', 'Rape',
-            'Weapons Offense', 'Weapons Carrying Etc',
-            'Sex Offense', 'Offences Against The Family And Children',
-            'Suicide', 'Human Trafficking (A), Commercial Sex Acts',
-            'Human Trafficking, Commercial Sex Acts'
-        }
-        return 'Violent' if category in violent else 'Non-Violent'
-
-    def categorize_crime_occupation(self, category):
-        blue_collar = {
-            'Assault', 'Robbery', 'Burglary', 'Motor Vehicle Theft', 'Larceny Theft',
-            'Malicious Mischief', 'Vandalism', 'Drug Offense',
-            'Weapons Offense', 'Weapons Carrying Etc', 'Homicide', 'Rape', 'Sex Offense',
-            'Disorderly Conduct', 'Prostitution', 'Suicide',
-            'Human Trafficking (A), Commercial Sex Acts', 'Human Trafficking, Commercial Sex Acts',
-            'Traffic Violation Arrest', 'Traffic Collision', 'Arson', 'Stolen Property',
-            'Civil Sidewalks', 'Suspicious', 'Recovered Vehicle'
-        }
-        return 'Blue-Collar' if category in blue_collar else 'White-Collar'
-
-    def create_super_categories(self):
-        mapping = {
-            'Property Crime': ['Larceny Theft', 'Burglary', 'Motor Vehicle Theft', 'Robbery'],
-            'Violence': ['Assault', 'Homicide', 'Rape'],
-            'Drugs': ['Drug Offense', 'Drug Violation'],
-            'Public Order': ['Disorderly Conduct', 'Vandalism'],
-            'Administrative': ['Non-Criminal', 'Other Offenses'],
-            'Family': ['Suicide', 'Human Trafficking']
-        }
-        reverse_map = {cat: super_cat for super_cat, cats in mapping.items() for cat in cats}
-        self.df['crime_type_super'] = self.df['incident_category'].map(reverse_map).fillna('Administrative')
-        self.df['crime_type_violent'] = self.df['incident_category'].apply(self.categorize_crime_violent)
-        self.df['crime_type_occupation'] = self.df['incident_category'].apply(self.categorize_crime_occupation)
-
-    def create_features(self):
-        self.df['incident_datetime'] = pd.to_datetime(self.df['incident_datetime'], errors='coerce')
-        self.df.dropna(subset=['incident_datetime', 'latitude', 'longitude'], inplace=True)
-        self.df['hour'] = self.df['incident_datetime'].dt.hour
-        self.df['month'] = self.df['incident_datetime'].dt.month
-        self.df['dayofweek'] = self.df['incident_datetime'].dt.weekday
-
-        le_neigh = LabelEncoder()
-        self.df['neigh_enc'] = le_neigh.fit_transform(self.df['analysis_neighborhood'].fillna('Unknown'))
-
-        self.df['geo_grid'] = pd.cut(self.df['latitude'], bins=10, labels=False) * 10 + pd.cut(self.df['longitude'], bins=10, labels=False)
+        logger.info(f"Data Start Date: {self.df.iloc[0]['incident_datetime']}, End Date: {self.df.iloc[-1]['incident_datetime']}")
+        logger.info(f"Data Shape: {self.df.columns.shape[0]}")
 
     def run_multiple_targets(self, label_cols):
         results = []
         
         for label_col in label_cols:
-            logger.info(f"\n=== Training with label: {label_col} ===")
+            logger.info(f"\n=== {label_cols.index(label_col)+1}.Training with label: {label_col} ===")
             
             try:
                 X_train, X_test, y_train, y_test, label_encoder = self.preprocess(label_col)
@@ -146,25 +126,29 @@ class RandomForestPipeline:
         logger.info("\n=== Summary ===\n" + str(df_results))
 
     def preprocess(self, target_col):
+        clusterer = DBSCANClusterer(eps=0.3, min_samples=10)
+        self.df = clusterer.fit_predict(self.df)
+        logger.info("DBSCAN clustering complete. Added 'cluster_id' feature.")
+
         self.create_super_categories()
         self.create_features()
 
-        features = ['hour', 'month', 'dayofweek', 'latitude', 'longitude', 'neigh_enc', 'geo_grid']
+        features = ['hour', 'month', 'dayOfweek', 'latitude', 'longitude', 'neighborhood', 'geo_grid', 'cluster_id']
         X = self.df[features]
         y_raw = self.df[target_col]
 
         # Filter out classes with very few samples - increase minimum to ensure stratification works
         class_counts = y_raw.value_counts()
-        min_samples_per_class = max(10, int(len(y_raw) * 0.3 * 0.01))  # At least 10 or 1% of 30% of data
+        min_samples_per_class = max(20, int(len(y_raw) * 0.3 * 0.01))  # At least 20 or 1% of 30% of data
         valid_classes = class_counts[class_counts >= min_samples_per_class].index
         
-        logger.info(f"Original classes: {len(class_counts)}")
-        logger.info(f"Min samples per class: {min_samples_per_class}")
-        logger.info(f"Valid classes (>={min_samples_per_class} samples): {len(valid_classes)}")
+        logger.info(f"  Original classes:       {len(class_counts)}")
+        logger.info(f"  Min samples per class:  {min_samples_per_class}")
+        logger.info(f"  Valid classes:          {len(valid_classes)}, which is bigger than {min_samples_per_class} samples")
         
+        # If not enough valid classes, fallback to a lower threshold
         if len(valid_classes) < 2:
-            # Fallback: use classes with at least 6 samples
-            min_samples_per_class = 6
+            min_samples_per_class = 6 # Fallback: use classes with at least 6 samples
             valid_classes = class_counts[class_counts >= min_samples_per_class].index
             logger.warning(f"Fallback: Using classes with >={min_samples_per_class} samples: {len(valid_classes)}")
             
@@ -179,8 +163,8 @@ class RandomForestPipeline:
         # Encode labels
         le = LabelEncoder()
         y = le.fit_transform(y_raw)
-        logger.info(f"Using label column '{target_col}': {len(le.classes_)} classes")
-        logger.info(f"Class distribution after filtering: {pd.Series(y).value_counts().sort_index().to_dict()}")
+        logger.info(f"  Using label column '{target_col}': {len(le.classes_)} classes")
+        logger.info(f"  -> Class distribution after filtering: {pd.Series(y).value_counts().sort_index().to_dict()}")
         self.label_encoder = le
 
         # Feature selection
@@ -218,6 +202,64 @@ class RandomForestPipeline:
                     )
         
         return X_train, X_test, y_train, y_test, le
+
+    def create_super_categories(self):
+        """
+        Create super categories and additional features based on incident categories.
+        Reduces the number of unique incident categories to a manageable set.
+        From 42 incident categories to:
+        - 6 super categories
+        - 2 violent categories
+        - 2 occupation categories
+        This helps in reducing complexity and improving model performance.
+        """
+        mapping = {
+            'Property Crime': ['Larceny Theft', 'Burglary', 'Motor Vehicle Theft', 'Robbery'],
+            'Violence': ['Assault', 'Homicide', 'Rape'],
+            'Drugs': ['Drug Offense', 'Drug Violation'],
+            'Public Order': ['Disorderly Conduct', 'Vandalism'],
+            'Administrative': ['Non-Criminal', 'Other Offenses'],
+            'Family': ['Suicide', 'Human Trafficking']
+        }
+        reverse_map = {cat: super_cat for super_cat, cats in mapping.items() for cat in cats}
+        self.df['crime_type_super'] = self.df['incident_category'].map(reverse_map).fillna('Administrative')
+
+        self.df['crime_type_violent'] = self.df['incident_category'].apply(self.categorize_crime_violent)
+        self.df['crime_type_occupation'] = self.df['incident_category'].apply(self.categorize_crime_occupation)
+
+    def categorize_crime_violent(self, category):
+        violent = {
+            'Assault', 'Robbery', 'Homicide', 'Rape',
+            'Weapons Offense', 'Weapons Carrying Etc',
+            'Sex Offense', 'Offences Against The Family And Children',
+            'Suicide', 'Human Trafficking (A), Commercial Sex Acts',
+            'Human Trafficking, Commercial Sex Acts'
+        }
+        return 'Violent' if category in violent else 'Non-Violent'
+
+    def categorize_crime_occupation(self, category):
+        blue_collar = {
+            'Assault', 'Robbery', 'Burglary', 'Motor Vehicle Theft', 'Larceny Theft',
+            'Malicious Mischief', 'Vandalism', 'Drug Offense',
+            'Weapons Offense', 'Weapons Carrying Etc', 'Homicide', 'Rape', 'Sex Offense',
+            'Disorderly Conduct', 'Prostitution', 'Suicide',
+            'Human Trafficking (A), Commercial Sex Acts', 'Human Trafficking, Commercial Sex Acts',
+            'Traffic Violation Arrest', 'Traffic Collision', 'Arson', 'Stolen Property',
+            'Civil Sidewalks', 'Suspicious', 'Recovered Vehicle'
+        }
+        return 'Blue-Collar' if category in blue_collar else 'White-Collar'
+
+    def create_features(self):
+        self.df['incident_datetime'] = pd.to_datetime(self.df['incident_datetime'], errors='coerce')
+        self.df.dropna(subset=['incident_datetime', 'latitude', 'longitude'], inplace=True)
+        self.df['hour'] = self.df['incident_datetime'].dt.hour
+        self.df['month'] = self.df['incident_datetime'].dt.month
+        self.df['dayOfweek'] = self.df['incident_datetime'].dt.weekday
+
+        le_neigh = LabelEncoder()
+        self.df['neighborhood'] = le_neigh.fit_transform(self.df['analysis_neighborhood'].fillna('Unknown'))
+
+        self.df['geo_grid'] = pd.cut(self.df['latitude'], bins=10, labels=False) * 10 + pd.cut(self.df['longitude'], bins=10, labels=False)
 
     def train_and_evaluate(self, X_train, X_test, y_train, y_test, label_encoder, suffix=""):
         model = RandomForestClassifier(n_estimators=100, max_depth=10, random_state=42)
@@ -268,36 +310,7 @@ class RandomForestPipeline:
         self.plot_feature_importance(model, suffix)
 
         return model, {'accuracy': acc, 'f1_score': f1, 'precision': precision}
-
-    def plot_confusion(self, y_true, y_pred, unique_labels, target_names, suffix=""):
-        cm = confusion_matrix(y_true, y_pred, labels=unique_labels)
-        
-        # Handle large number of classes
-        if len(target_names) > 20:
-            figsize = (max(12, len(target_names) * 0.6), max(10, len(target_names) * 0.5))
-            annot = False  # Don't show numbers for large matrices
-        else:
-            figsize = (8, 6)
-            annot = True
-            
-        plt.figure(figsize=figsize)
-        sns.heatmap(cm, annot=annot, fmt='d', cmap='Reds',
-                    xticklabels=target_names,
-                    yticklabels=target_names)
-        plt.xlabel('Predicted')
-        plt.ylabel('Actual')
-        plt.title(f'Confusion Matrix - {suffix}')
-        
-        # Rotate labels if too many classes
-        if len(target_names) > 10:
-            plt.xticks(rotation=45, ha='right')
-            plt.yticks(rotation=0)
-        
-        plt.tight_layout()
-        os.makedirs("outputs", exist_ok=True)
-        plt.savefig(f"outputs/confusion_matrix_{suffix}.png", dpi=300, bbox_inches='tight')
-        plt.close()
-
+    
     def create_classification_report_table(self, report_dict, suffix=""):
         """Create and save detailed classification report as table"""
         # Extract per-class metrics
@@ -388,6 +401,35 @@ class RandomForestPipeline:
             plt.savefig(f"outputs/class_performance_{suffix}.png", dpi=300, bbox_inches='tight')
             plt.close()
 
+    def plot_confusion(self, y_true, y_pred, unique_labels, target_names, suffix=""):
+        cm = confusion_matrix(y_true, y_pred, labels=unique_labels)
+        
+        # Handle large number of classes
+        if len(target_names) > 20:
+            figsize = (max(12, len(target_names) * 0.6), max(10, len(target_names) * 0.5))
+            annot = False  # Don't show numbers for large matrices
+        else:
+            figsize = (8, 6)
+            annot = True
+            
+        plt.figure(figsize=figsize)
+        sns.heatmap(cm, annot=annot, fmt='d', cmap='Reds',
+                    xticklabels=target_names,
+                    yticklabels=target_names)
+        plt.xlabel('Predicted')
+        plt.ylabel('Actual')
+        plt.title(f'Confusion Matrix - {suffix}')
+        
+        # Rotate labels if too many classes
+        if len(target_names) > 10:
+            plt.xticks(rotation=45, ha='right')
+            plt.yticks(rotation=0)
+        
+        plt.tight_layout()
+        os.makedirs("outputs", exist_ok=True)
+        plt.savefig(f"outputs/confusion_matrix_{suffix}.png", dpi=300, bbox_inches='tight')
+        plt.close()
+
     def plot_scores(self, acc, f1, precision, suffix=""):
         # Create bar chart for metrics
         plt.figure(figsize=(8, 6))
@@ -450,6 +492,17 @@ class RandomForestPipeline:
         plt.close()
 
 if __name__ == "__main__":
+    """
+    Main entry point for running the Random Forest pipeline with multiple targets.
+    Incident categories(42 types),
+    Super categories (6 types),
+    Violent categories (2 types),
+    Occupation categories (2 types).
+    This will train and evaluate the model for each target and save results.
+    The results will be saved in the 'outputs' directory.
+    Usage:
+        python baseline_rf.py
+    """
     pipeline = RandomForestPipeline()
     label_columns = ['incident_category', 'crime_type_super', 'crime_type_violent', 'crime_type_occupation']
     pipeline.run_multiple_targets(label_columns)

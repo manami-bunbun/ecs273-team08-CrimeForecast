@@ -1,0 +1,8 @@
+Class,Precision,Recall,F1-Score,Support
+Administrative,0.5941,0.274,0.375,9738
+Drugs,0.1656,0.7608,0.272,648
+Property Crime,0.4917,0.64,0.5561,7481
+Public Order,0.0449,0.0879,0.0594,421
+Violence,0.1329,0.155,0.1431,1555
+--- MACRO AVG ---,0.2858,0.3835,0.2811,19843
+--- WEIGHTED AVG ---,0.4937,0.4146,0.4151,19843

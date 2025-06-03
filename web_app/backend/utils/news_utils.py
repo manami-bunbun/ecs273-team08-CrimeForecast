@@ -6,15 +6,10 @@ import os
 import aiohttp
 from pydantic import BaseModel
 import json
+from .data_schema import NewsItem
 
 load_dotenv()
 
-class NewsItem(BaseModel):
-    title: str
-    link: str
-    published_date: datetime
-    summary: str
-    relevance_score: float
 
 # fetch San Francisco news from NewsAPI
 async def fetch_sf_news(start_date: datetime, end_date: datetime) -> List[Dict]:

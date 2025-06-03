@@ -1,6 +1,6 @@
 from typing import Dict, Optional
 from datetime import datetime, timedelta
-from .models import NewsItem, LLMAdvice
+from .data_schema import NewsItem, LLMAdvice
 from typing import List
 
 class AnalysisCache:
@@ -32,5 +32,5 @@ class AnalysisCache:
         self._advice_cache[key] = advice
         self._cache_time[key] = datetime.now()
 
-# Global cache instance
+#  instance
 analysis_cache = AnalysisCache() 

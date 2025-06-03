@@ -109,7 +109,6 @@ async def get_cached_news(
     start_date: str = Query(..., description="Start date in YYYY-MM-DD format"),
     end_date: str = Query(..., description="End date in YYYY-MM-DD format")
 ):
-    """Get cached news for an area"""
     news = analysis_cache.get_news(area_name, start_date, end_date)
     if news is None:
         raise HTTPException(
@@ -125,7 +124,7 @@ async def get_cached_advice(
     start_date: str = Query(..., description="Start date in YYYY-MM-DD format"),
     end_date: str = Query(..., description="End date in YYYY-MM-DD format")
 ):
-    """Get cached LLM advice for an area"""
+
     advice = analysis_cache.get_advice(area_name, start_date, end_date)
     if advice is None:
         raise HTTPException(

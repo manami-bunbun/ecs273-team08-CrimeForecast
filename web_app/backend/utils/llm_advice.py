@@ -4,7 +4,7 @@ from openai import OpenAI
 from dotenv import load_dotenv
 import os
 import json
-from .models import NewsItem, HeatmapData, LLMAdvice
+from .data_schema import NewsItem, HeatmapData, LLMAdvice
 
 load_dotenv()
 

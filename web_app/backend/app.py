@@ -4,11 +4,11 @@ from typing import List, Optional
 from datetime import datetime
 from motor.motor_asyncio import AsyncIOMotorClient
 from utils.news_utils import fetch_sf_news, analyze_news_relevance
-from utils.llm_analysis import analyze_area_safety
-from utils.models import NewsItem, HeatmapData, LLMAdvice, AreaAnalysis
+from utils.llm_advice import analyze_area_safety
+from utils.data_schema import NewsItem, HeatmapData, LLMAdvice, AreaAnalysis
 from dotenv import load_dotenv
 import os
-from utils.cache import analysis_cache
+from utils.store_analysis import analysis_cache
 
 # Load environment variables
 load_dotenv()

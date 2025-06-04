@@ -113,7 +113,7 @@ class RandomForestPipeline:
         self.create_features()
 
         features = ['hour', 'month', 'dayOfweek', 'latitude', 'longitude', 
-                    'neighborhood', 'geo_grid', 'grid_id', 'grid_density']
+                    'neighborhood', 'geo_grid']
         X = self.df[features]
         y_raw = self.df[target_col]
 

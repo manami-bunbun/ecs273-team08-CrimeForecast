@@ -11,7 +11,7 @@ from sklearn.ensemble import RandomForestClassifier
 from sklearn.model_selection import train_test_split, learning_curve
 from sklearn.preprocessing import LabelEncoder
 from sklearn.feature_selection import SelectKBest, mutual_info_classif
-from sklearn.metrics import classification_report, confusion_matrix, accuracy_score, f1_score, precision_score
+from sklearn.metrics import classification_report, confusion_matrix, accuracy_score, f1_score, precision_score, recall_score, roc_auc_score
 from imblearn.over_sampling import SMOTE
 from collections import Counter
 
@@ -20,28 +20,6 @@ from sklearn.preprocessing import StandardScaler
 
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
-
-class DBSCANClusterer:
-    def __init__(self, eps=0.3, min_samples=10):
-        self.eps = eps
-        self.min_samples = min_samples
-        self.model = DBSCAN(eps=self.eps, min_samples=self.min_samples)
-    
-    def fit_predict(self, df, lat_col='latitude', lon_col='longitude'):
-        if lat_col not in df.columns or lon_col not in df.columns:
-            raise ValueError("Missing latitude or longitude columns in DataFrame.")
-
-        coords = df[[lat_col, lon_col]].dropna()
-        coords_scaled = StandardScaler().fit_transform(coords)
-
-        cluster_labels = self.model.fit_predict(coords_scaled)
-
-        # 預設所有 cluster_id 是 NaN，再補回對應 index 的 label
-        full_labels = pd.Series(np.nan, index=df.index)
-        full_labels[coords.index] = cluster_labels
-
-        df['cluster_id'] = full_labels
-        return df
     
 class RandomForestPipeline:
     def __init__(self):
@@ -57,14 +35,15 @@ class RandomForestPipeline:
 
         self.df = pd.read_csv(self.csv_path)
         logger.info("CSV file loaded successfully")
-        logger.info(f"Data Start Date: {self.df.iloc[0]['incident_datetime']}, End Date: {self.df.iloc[-1]['incident_datetime']}")
-        logger.info(f"Data Shape: {self.df.columns.shape[0]}")
+        logger.info(f"Data End Date: {self.df.iloc[0]['incident_datetime']}, Start Date: {self.df.iloc[-1]['incident_datetime']}")
+        logger.info(f"Data Shape: {self.df.shape[0]} num od data, {self.df.shape[1]} num of features.")
+
 
     def run_multiple_targets(self, label_cols):
         results = []
         
         for label_col in label_cols:
-            logger.info(f"\n=== {label_cols.index(label_col)+1}.Training with label: {label_col} ===")
+            logger.info(f"\n====== {label_cols.index(label_col)+1}.Training with label: {label_col} ======")
             
             try:
                 X_train, X_test, y_train, y_test, label_encoder = self.preprocess(label_col)
@@ -115,6 +94,8 @@ class RandomForestPipeline:
                     'accuracy': 0.0,
                     'f1_score': 0.0,
                     'precision': 0.0,
+                    'recall': 0.0,
+                    'roc_auc': None,
                     'training_time_sec': 0.0,
                     'used_smote': False,
                     'error': str(e)
@@ -123,48 +104,47 @@ class RandomForestPipeline:
         df_results = pd.DataFrame(results)
         os.makedirs("outputs", exist_ok=True)
         df_results.to_csv("outputs/model_comparison.csv", index=False)
-        logger.info("\n=== Summary ===\n" + str(df_results))
+        self.plot_all_model_scores(df_results)
+        logger.info("\n====== Summary ======\n" + str(df_results))
 
     def preprocess(self, target_col):
-        clusterer = DBSCANClusterer(eps=0.3, min_samples=10)
-        self.df = clusterer.fit_predict(self.df)
-        logger.info("DBSCAN clustering complete. Added 'cluster_id' feature.")
 
         self.create_super_categories()
         self.create_features()
 
-        features = ['hour', 'month', 'dayOfweek', 'latitude', 'longitude', 'neighborhood', 'geo_grid', 'cluster_id']
+        features = ['hour', 'month', 'dayOfweek', 'latitude', 'longitude', 
+                    'neighborhood', 'geo_grid', 'grid_id', 'grid_density']
         X = self.df[features]
         y_raw = self.df[target_col]
 
         # Filter out classes with very few samples - increase minimum to ensure stratification works
         class_counts = y_raw.value_counts()
         min_samples_per_class = max(20, int(len(y_raw) * 0.3 * 0.01))  # At least 20 or 1% of 30% of data
-        valid_classes = class_counts[class_counts >= min_samples_per_class].index
-        
+
         logger.info(f"  Original classes:       {len(class_counts)}")
         logger.info(f"  Min samples per class:  {min_samples_per_class}")
-        logger.info(f"  Valid classes:          {len(valid_classes)}, which is bigger than {min_samples_per_class} samples")
-        
-        # If not enough valid classes, fallback to a lower threshold
+
+        # If the sample size id too small, mark it as Other
+        small_classes = class_counts[class_counts < min_samples_per_class].index
+        y_raw = y_raw.apply(lambda x: 'Other' if x in small_classes else x)
+
+        # Check of class Other is enough or not
+        final_counts = y_raw.value_counts()
+        valid_classes = final_counts[final_counts >= min_samples_per_class].index
+
+        logger.info(f"  Valid classes:          {len(valid_classes)} , which is bigger than {min_samples_per_class} samples")
+
+        y_raw = y_raw[y_raw.isin(valid_classes)]
+        X = X.loc[y_raw.index]
+
         if len(valid_classes) < 2:
-            min_samples_per_class = 6 # Fallback: use classes with at least 6 samples
-            valid_classes = class_counts[class_counts >= min_samples_per_class].index
-            logger.warning(f"Fallback: Using classes with >={min_samples_per_class} samples: {len(valid_classes)}")
-            
-            if len(valid_classes) < 2:
-                raise ValueError(f"Not enough valid classes for classification. Only {len(valid_classes)} classes have >={min_samples_per_class} samples.")
-        
-        # Filter data to only include valid classes
-        mask = y_raw.isin(valid_classes)
-        X = X[mask]
-        y_raw = y_raw[mask]
+            raise ValueError(f"Not enough valid classes for classification. Only {len(valid_classes)} classes >= {min_samples_per_class} samples.")
 
         # Encode labels
         le = LabelEncoder()
         y = le.fit_transform(y_raw)
         logger.info(f"  Using label column '{target_col}': {len(le.classes_)} classes")
-        logger.info(f"  -> Class distribution after filtering: {pd.Series(y).value_counts().sort_index().to_dict()}")
+        logger.info(f"      Class distribution after filtering: "+ "\n" +f"      {pd.Series(y).value_counts().sort_index().to_dict()}")
         self.label_encoder = le
 
         # Feature selection
@@ -172,7 +152,7 @@ class RandomForestPipeline:
         X_new = selector.fit_transform(X, y)
         self.selected_features = [features[i] for i in selector.get_support(indices=True)]
 
-        # Use stratified split with better error handling
+        # Stratified split with multiple attempts
         max_attempts = 3
         for attempt in range(max_attempts):
             try:
@@ -180,7 +160,6 @@ class RandomForestPipeline:
                     X_new, y, test_size=0.3, random_state=42 + attempt, stratify=y
                 )
                 
-                # Verify that all classes are present in both splits
                 train_classes = set(y_train)
                 test_classes = set(y_test)
                 all_classes = set(y)
@@ -200,7 +179,7 @@ class RandomForestPipeline:
                     X_train, X_test, y_train, y_test = train_test_split(
                         X_new, y, test_size=0.3, random_state=42
                     )
-        
+
         return X_train, X_test, y_train, y_test, le
 
     def create_super_categories(self):
@@ -261,6 +240,25 @@ class RandomForestPipeline:
 
         self.df['geo_grid'] = pd.cut(self.df['latitude'], bins=10, labels=False) * 10 + pd.cut(self.df['longitude'], bins=10, labels=False)
 
+        # Geo feature: 0.01 as ablock size
+        lat_bins = np.arange(self.df['latitude'].min(), self.df['latitude'].max(), 0.01)
+        lon_bins = np.arange(self.df['longitude'].min(), self.df['longitude'].max(), 0.01)
+
+        self.df['lat_bin'] = pd.cut(self.df['latitude'], bins=lat_bins, labels=False)
+        self.df['lon_bin'] = pd.cut(self.df['longitude'], bins=lon_bins, labels=False)
+
+        self.df['grid_id'] = self.df['lat_bin'] * 1000 + self.df['lon_bin']
+
+        grid_density = self.df['grid_id'].value_counts().to_dict()
+        self.df['grid_density'] = self.df['grid_id'].map(grid_density).fillna(0)
+
+        # Fill NaN values with -1 for categorical features
+        self.df['lat_bin'] = self.df['lat_bin'].fillna(-1)
+        self.df['lon_bin'] = self.df['lon_bin'].fillna(-1)
+        self.df['grid_id'] = self.df['grid_id'].fillna(-1)
+        self.df['grid_density'] = self.df['grid_density'].fillna(0)
+
+
     def train_and_evaluate(self, X_train, X_test, y_train, y_test, label_encoder, suffix=""):
         model = RandomForestClassifier(n_estimators=100, max_depth=10, random_state=42)
         model.fit(X_train, y_train)
@@ -275,8 +273,24 @@ class RandomForestPipeline:
         acc = accuracy_score(y_test, y_pred)
         f1 = f1_score(y_test, y_pred, average='weighted', zero_division=0)
         precision = precision_score(y_test, y_pred, average='weighted', zero_division=0)
-        
-        logger.info(f"Accuracy: {acc:.4f}, F1 Score: {f1:.4f}, Precision: {precision:.4f}")
+        recall = recall_score(y_test, y_pred, average='weighted', zero_division=0)
+
+        try:
+            y_proba = model.predict_proba(X_test)
+
+            if len(label_encoder.classes_) == 2:
+                # Binary classification
+                roc_auc = roc_auc_score(y_test, y_proba[:, 1])
+            else:
+                # Multiclass classification
+                roc_auc = roc_auc_score(y_test, y_proba, multi_class='ovr', average='weighted')
+
+        except Exception as e:
+            roc_auc = None
+            logger.warning(f"ROC AUC could not be computed: {e}")
+
+                
+        logger.info(f"Accuracy: {acc:.4f}, F1 Score: {f1:.4f}, Precision: {precision:.4f}, Recall: {recall:.4f}, ROC AUC: {roc_auc:.4f}.")
 
         # Get per-class metrics with proper label handling
         try:
@@ -298,18 +312,17 @@ class RandomForestPipeline:
                 target_names=target_names,
                 zero_division=0
             )
-            logger.info("\n" + report)
+            logger.info("\n" + report+ "\n")
             
         except Exception as e:
             logger.warning(f"Could not generate classification report: {e}")
 
         # Use proper label mapping for confusion matrix
         self.plot_confusion(y_test, y_pred, unique_labels, target_names, suffix)
-        self.plot_scores(acc, f1, precision, suffix)
         self.plot_learning_curve(model, X_train, y_train, suffix)
         self.plot_feature_importance(model, suffix)
 
-        return model, {'accuracy': acc, 'f1_score': f1, 'precision': precision}
+        return model, {'accuracy': acc, 'f1_score': f1, 'precision': precision, 'recall': recall, 'roc_auc': roc_auc}
     
     def create_classification_report_table(self, report_dict, suffix=""):
         """Create and save detailed classification report as table"""
@@ -385,7 +398,7 @@ class RandomForestPipeline:
             
             # Plot 2: Support (sample count) by class
             bars = ax2.bar(viz_df['Class'], viz_df['Support'], 
-                          alpha=0.8, color='Set3', edgecolor='grey')
+                          alpha=0.8, color='#438add', edgecolor='grey')
             ax2.set_xlabel('Classes')
             ax2.set_ylabel('Number of Samples')
             ax2.set_title(f'Sample Distribution by Class - {suffix}')
@@ -430,39 +443,6 @@ class RandomForestPipeline:
         plt.savefig(f"outputs/confusion_matrix_{suffix}.png", dpi=300, bbox_inches='tight')
         plt.close()
 
-    def plot_scores(self, acc, f1, precision, suffix=""):
-        # Create bar chart for metrics
-        plt.figure(figsize=(8, 6))
-        metrics = [acc, f1, precision]
-        names = ['Accuracy', 'F1 Score', 'Precision']
-        colors = ['skyblue', 'lightgreen', 'lightcoral']
-        
-        bars = plt.bar(names, metrics, color=colors, alpha=0.7, edgecolor='black')
-        plt.ylim(0, 1)
-        plt.ylabel('Score')
-        plt.title(f'Model Performance Metrics - {suffix}')
-        
-        # Add value labels on bars
-        for bar, value in zip(bars, metrics):
-            plt.text(bar.get_x() + bar.get_width()/2, bar.get_height() + 0.01, 
-                    f'{value:.4f}', ha='center', va='bottom', fontweight='bold')
-        
-        plt.grid(axis='y', alpha=0.3)
-        plt.tight_layout()
-        os.makedirs("outputs", exist_ok=True)
-        plt.savefig(f"outputs/metrics_plot_{suffix}.png", dpi=300)
-        plt.close()
-        
-        # Create and save metrics table
-        metrics_df = pd.DataFrame({
-            'Metric': names,
-            'Score': metrics
-        })
-        metrics_df['Score'] = metrics_df['Score'].round(4)
-        metrics_df.to_csv(f"outputs/metrics_table_{suffix}.csv", index=False)
-        logger.info(f"\nMetrics Table for {suffix}:")
-        logger.info(metrics_df.to_string(index=False))
-
     def plot_learning_curve(self, model, X, y, suffix=""):
         train_sizes, train_scores, test_scores = learning_curve(model, X, y, cv=5, scoring='accuracy')
         train_mean = np.mean(train_scores, axis=1)
@@ -484,11 +464,35 @@ class RandomForestPipeline:
         importances = model.feature_importances_
         feature_names = self.selected_features
         plt.figure(figsize=(8, 5))
-        sns.barplot(x=importances, y=feature_names, palette='Set3')
+        sns.barplot(x=importances, y=feature_names, palette='Set3', hue=importances)
         plt.title("Feature Importances")
         plt.tight_layout()
         os.makedirs("outputs", exist_ok=True)
         plt.savefig(f"outputs/feature_importance_{suffix}.png")
+        plt.close()
+
+    def plot_all_model_scores(self, metrics_df):
+        """
+        Expects a DataFrame like:
+        label, accuracy, f1_score, precision, recall, roc_auc
+
+        Model Label	        | Accuracy	| F1 Score	| Precision	| Recall | ROC AUC
+        incident_category	| 0.54	    | 0.50    	| 0.52    	| 0.51	 | 0.62
+        crime_type_super	| 0.72	    | 0.69	    | 0.70    	| 0.68	 | 0.76
+        crime_type_violent	| 0.89     	| 0.88    	| 0.90	    | 0.86	 | 0.93
+        """
+        df_melted = metrics_df.melt(id_vars='label', 
+                                    value_vars=['accuracy', 'f1_score', 'precision', 'recall', 'roc_auc'],
+                                    var_name='Metric', value_name='Score')
+
+        plt.figure(figsize=(10, 6))
+        sns.barplot(x='Metric', y='Score', hue='label', data=df_melted)
+        plt.ylim(0, 1)
+        plt.title('Comparison of Model Performance Across Targets')
+        plt.ylabel('Score')
+        plt.tight_layout()
+        os.makedirs("outputs", exist_ok=True)
+        plt.savefig("outputs/model_comparison_all_metrics.png", dpi=300)
         plt.close()
 
 if __name__ == "__main__":

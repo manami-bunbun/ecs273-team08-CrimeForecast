@@ -1,0 +1,5 @@
+Class,Precision,Recall,F1-Score,Support
+Blue-Collar,0.6626,0.961,0.7844,12709
+White-Collar,0.6514,0.1297,0.2164,7146
+--- MACRO AVG ---,0.657,0.5453,0.5004,19855
+--- WEIGHTED AVG ---,0.6586,0.6618,0.5799,19855

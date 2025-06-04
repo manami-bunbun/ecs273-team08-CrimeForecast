@@ -1,0 +1,28 @@
+Class,Precision,Recall,F1-Score,Support
+Assault,0.2017,0.0304,0.0528,1546
+Burglary,0.218,0.301,0.2529,1196
+Courtesy Report,0.0332,0.3846,0.0611,65
+Disorderly Conduct,0.0539,0.0294,0.0381,374
+Drug Offense,0.1843,0.693,0.2911,645
+Forgery And Counterfeiting,0.0121,0.1867,0.0227,75
+Fraud,0.0933,0.1606,0.118,579
+Larceny Theft,0.4502,0.2922,0.3544,5281
+Lost Property,0.0686,0.1119,0.0851,679
+Malicious Mischief,0.1818,0.016,0.0295,1497
+Miscellaneous Investigation,0.0643,0.0635,0.0639,457
+Missing Person,0.1041,0.1407,0.1197,519
+Motor Vehicle Theft,0.0774,0.039,0.0519,590
+Non-Criminal,0.2581,0.0059,0.0114,1367
+Offences Against The Family And Children,0.0417,0.0465,0.044,258
+Other,0.0357,0.0603,0.0449,282
+Other Miscellaneous,0.1959,0.0488,0.0781,1168
+Other Offenses,0.0316,0.0741,0.0443,162
+Recovered Vehicle,0.1183,0.1852,0.1444,610
+Robbery,0.0628,0.1087,0.0796,414
+Suspicious Occ,0.0455,0.0166,0.0243,543
+Traffic Violation Arrest,0.0093,0.0658,0.0164,76
+Warrant,0.1896,0.2345,0.2097,806
+Weapons Carrying Etc,0.0086,0.0769,0.0155,65
+Weapons Offense,0.0446,0.1304,0.0664,138
+--- MACRO AVG ---,0.1114,0.1401,0.0928,19392
+--- WEIGHTED AVG ---,0.2313,0.1679,0.1654,19392

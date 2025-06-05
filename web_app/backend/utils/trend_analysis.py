@@ -2,118 +2,82 @@ from typing import List, Dict, Optional
 import pandas as pd
 import numpy as np
 from datetime import datetime, timedelta
-from openai import OpenAI
 import os
 import json
 from pydantic import BaseModel
+import logging
 
+logger = logging.getLogger(__name__)
 
-client = OpenAI(
-    api_key=os.getenv("OPENAI_API_KEY"),
-    timeout=30.0
-)
-
-class TrendAnalysis(BaseModel):
+class TrendData(BaseModel):
     time_period: str
     crime_trends: Dict[str, float]
-    pattern_description: str
-    contributing_factors: List[str]
-    news_context: str
-    recommendations: List[str]
+    temporal_patterns: Dict[str, Dict[str, int]]
+    location_patterns: Dict[str, int]
+    relevant_news: Optional[List[Dict]] = None
 
 async def analyze_crime_trends(
     df: pd.DataFrame,
     time_window: str = "30D",
     news_items: Optional[List[Dict]] = None
-) -> TrendAnalysis:
+) -> TrendData:
     try:
         # Convert datetime and sort
         df['incident_datetime'] = pd.to_datetime(df['incident_datetime'])
         df = df.sort_values('incident_datetime')
         
-        # Calculate time windows
+        # Get the latest date in the dataset
         end_date = df['incident_datetime'].max()
-        start_date = end_date - pd.Timedelta(time_window)
         
-        # Get data for current and previous periods
-        current_period = df[df['incident_datetime'] >= start_date]
-        prev_start = start_date - pd.Timedelta(time_window)
-        previous_period = df[(df['incident_datetime'] >= prev_start) & (df['incident_datetime'] < start_date)]
+        # Define time periods
+        last_month_start = end_date - pd.Timedelta(days=30)
+        comparison_start = last_month_start - pd.Timedelta(days=150) 
         
-        # Calculate crime type trends
-        current_counts = current_period['incident_category'].value_counts()
-        previous_counts = previous_period['incident_category'].value_counts()
+        # Split data into periods
+        last_month_data = df[df['incident_datetime'] >= last_month_start]
+        comparison_data = df[(df['incident_datetime'] >= comparison_start) & 
+                           (df['incident_datetime'] < last_month_start)]
         
-        # Calculate percent changes
+        # Calculate crime counts for both periods
+        last_month_counts = last_month_data['incident_category'].value_counts()
+        comparison_counts = comparison_data['incident_category'].value_counts() / 5  
+        
+        # Calculate trends (percentage change)
         crime_trends = {}
-        for crime_type in set(current_counts.index) | set(previous_counts.index):
-            curr = current_counts.get(crime_type, 0)
-            prev = previous_counts.get(crime_type, 0)
-            if prev > 0:
-                pct_change = ((curr - prev) / prev) * 100
+        for category in set(last_month_counts.index) | set(comparison_counts.index):
+            last_month_count = last_month_counts.get(category, 0)
+            avg_previous_count = comparison_counts.get(category, 0)
+            
+            if avg_previous_count > 0:
+                change = ((last_month_count - avg_previous_count) / avg_previous_count) * 100
             else:
-                pct_change = 100 if curr > 0 else 0
-            crime_trends[crime_type] = round(pct_change, 2)
+                change = 100 if last_month_count > 0 else 0
+                
+            crime_trends[category] = round(change, 2)
         
-        # Temporal patterns
-        current_period['hour'] = current_period['incident_datetime'].dt.hour
-        current_period['day_of_week'] = current_period['incident_datetime'].dt.day_name()
+        # Temporal patterns (last month only)
+        hourly_patterns = last_month_data['incident_datetime'].dt.hour.value_counts().to_dict()
+        daily_patterns = last_month_data['incident_datetime'].dt.day_name().value_counts().to_dict()
         
-        hourly_patterns = current_period.groupby('hour').size()
-        daily_patterns = current_period.groupby('day_of_week').size()
-        
-        # Location patterns
-        location_patterns = current_period.groupby('analysis_neighborhood').size()
-        
-        # Prepare data for LLM analysis
-        trend_data = {
-            "time_period": f"{start_date.strftime('%Y-%m-%d')} to {end_date.strftime('%Y-%m-%d')}",
-            "crime_trends": crime_trends,
-            "temporal_patterns": {
-                "hourly": hourly_patterns.to_dict(),
-                "daily": daily_patterns.to_dict()
-            },
-            "location_patterns": location_patterns.to_dict()
+        temporal_patterns = {
+            "hourly": {str(k): v for k, v in hourly_patterns.items()},
+            "daily": daily_patterns
         }
         
-        if news_items:
-            trend_data["relevant_news"] = [
-                {
-                    "title": item["title"],
-                    "summary": item["summary"],
-                    "relevance_score": item.get("relevance_score", 0)
-                }
-                for item in news_items
-            ]
+        # Location patterns (last month only)
+        location_patterns = last_month_data['police_district'].value_counts().to_dict()
         
-        # Generate LLM analysis
-        response = client.chat.completions.create(
-            model="gpt-4o",
-            messages=[
-                {"role": "system", "content": "You are a crime analysis expert. You must respond with valid JSON only."},
-                {"role": "user", "content": """Please analyze the crime data and respond with a JSON object in this exact format:
-                    {
-                        "pattern_description": "Natural language description of main trends",
-                        "contributing_factors": ["factor1", "factor2", "factor3"],
-                        "news_context": "How recent news events relate to patterns",
-                        "recommendations": ["rec1", "rec2", "rec3"]
-                    }"""},
-                {"role": "user", "content": f"Crime trend data to analyze:\n\n{json.dumps(trend_data, indent=2)}"}
-            ],
-            temperature=0.2,
-            max_tokens=1000
-        )
+        # Format time period string
+        time_period = f"{last_month_start.strftime('%Y-%m-%d')} to {end_date.strftime('%Y-%m-%d')}"
         
-        analysis = json.loads(response.choices[0].message.content.strip())
-        
-        return TrendAnalysis(
-            time_period=trend_data["time_period"],
+        return TrendData(
+            time_period=time_period,
             crime_trends=crime_trends,
-            pattern_description=analysis["pattern_description"],
-            contributing_factors=analysis["contributing_factors"],
-            news_context=analysis["news_context"],
-            recommendations=analysis["recommendations"]
+            temporal_patterns=temporal_patterns,
+            location_patterns=location_patterns,
+            relevant_news=news_items[:5] if news_items else None
         )
         
     except Exception as e:
-        raise ValueError(f"Error in trend analysis: {str(e)}") 
+        logger.error(f"Error in trend analysis: {e}")
+        raise ValueError(f"Error in trend analysis: {e}") 

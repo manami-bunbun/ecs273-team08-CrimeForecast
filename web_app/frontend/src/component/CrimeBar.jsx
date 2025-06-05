@@ -159,14 +159,90 @@
 import React, { useRef, useEffect, useMemo, useState } from 'react';
 import * as d3 from 'd3';
 
-export default function InteractiveCrimeBarChart({ data, startDate, endDate }) {
-  const svgRef     = useRef();
+const API_BASE_URL = 'http://localhost:8001';
+
+export default function InteractiveCrimeBarChart({ endDate }) {
+  const svgRef = useRef();
   const tooltipRef = useRef();
+  const [data, setData] = useState([]);
+  const [loading, setLoading] = useState(false);
+  const [error, setError] = useState(null);
+
+  // ── FETCH DATA ──
+  useEffect(() => {
+    const fetchData = async () => {
+      if (!endDate) return;
+      
+      setLoading(true);
+      setError(null);
+      
+      try {
+        // Format the date to YYYY-MM-DD
+        const formattedDate = new Date(endDate).toISOString().split('T')[0];
+        
+        const response = await fetch(
+          `${API_BASE_URL}/api/crime-data?end_date=${formattedDate}`,
+          {
+            method: 'GET',
+            headers: {
+              'Accept': 'application/json',
+              'Content-Type': 'application/json'
+            }
+          }
+        );
+        
+        if (!response.ok) {
+          const errorText = await response.text();
+          throw new Error(`HTTP error! status: ${response.status}, message: ${errorText}`);
+        }
+        
+        const jsonData = await response.json();
+        if (!Array.isArray(jsonData)) {
+          throw new Error('Invalid data format received from server');
+        }
+
+        if (jsonData.length === 0) {
+          setData([]);
+          return;
+        }
+        
+        // Process and validate the data
+        const validData = jsonData
+          .filter(item => item.incident_datetime && item.incident_category)
+          .map(item => {
+            try {
+              const date = new Date(item.incident_datetime);
+              if (isNaN(date.getTime())) {
+                return null;
+              }
+              return {
+                date,
+                category: item.incident_category || 'Unknown'
+              };
+            } catch (err) {
+              console.warn('Invalid date format:', item.incident_datetime);
+              return null;
+            }
+          })
+          .filter(item => item !== null);
+
+        setData(validData);
+      } catch (err) {
+        setError(err.message);
+        console.error('Error fetching crime data:', err);
+        setData([]);
+      } finally {
+        setLoading(false);
+      }
+    };
+
+    fetchData();
+  }, [endDate]);
 
   // ── CHART DIMENSIONS ──
-  const width   = 1000;
-  const height  = 600;
-  const margin  = { top: 40, right: 20, bottom: 50, left: 200 };
+  const width = 1000;
+  const height = 600;
+  const margin = { top: 40, right: 20, bottom: 50, left: 200 };
 
   // ── CATEGORY SELECTION ──
   const allCategories = useMemo(
@@ -178,19 +254,17 @@ export default function InteractiveCrimeBarChart({ data, startDate, endDate }) {
 
   // ── FILTER & AGGREGATE ──
   const aggregated = useMemo(() => {
-    const filtered = data.filter(d =>
-      (!startDate || d.date >= startDate) &&
-      (!endDate   || d.date <= endDate) &&
-      selectedCats.includes(d.category)
-    );
+    const filtered = data.filter(d => selectedCats.includes(d.category));
     const counts = d3.rollup(filtered, v => v.length, d => d.category);
     return Array.from(counts, ([category, count]) => ({ category, count }))
                 .sort((a, b) => b.count - a.count);
-  }, [data, startDate, endDate, selectedCats]);
+  }, [data, selectedCats]);
 
   // ── DRAW (horizontal bars with truncated labels) ──
   useEffect(() => {
-    const svg     = d3.select(svgRef.current);
+    if (!aggregated.length) return;
+
+    const svg = d3.select(svgRef.current);
     const tooltip = d3.select(tooltipRef.current);
     svg.selectAll('*').remove();
 
@@ -204,7 +278,7 @@ export default function InteractiveCrimeBarChart({ data, startDate, endDate }) {
     const y = d3.scaleBand()
       .domain(aggregated.map(d => d.category))
       .range([margin.top, height - margin.bottom])
-      .padding(0.2); // extra padding for space between labels
+      .padding(0.2);
 
     // 3) Bottom x-axis (counts)
     svg.append('g')
@@ -250,14 +324,14 @@ export default function InteractiveCrimeBarChart({ data, startDate, endDate }) {
           tooltip
             .style('opacity', 1)
             .html(`<strong>${d.category}</strong><br/>Count: ${d.count}`)
-            .style('left',  (event.clientX - rect.left + 10) + 'px')
-            .style('top',   (event.clientY - rect.top + 10) + 'px');
+          .style('left', (event.clientX - rect.left + 10) + 'px')
+          .style('top', (event.clientY - rect.top + 10) + 'px');
         })
         .on('mousemove', event => {
           const rect = svgRef.current.getBoundingClientRect();
           tooltip
             .style('left', (event.clientX - rect.left + 10) + 'px')
-            .style('top',  (event.clientY - rect.top + 10) + 'px');
+          .style('top', (event.clientY - rect.top + 10) + 'px');
         })
         .on('mouseout', () => {
           tooltip.style('opacity', 0);
@@ -272,18 +346,21 @@ export default function InteractiveCrimeBarChart({ data, startDate, endDate }) {
         : [...prev, cat]
     );
 
-  // ── TITLE FORMATTING ──
-  const fmt = d3.timeFormat('%Y-%m-%d');
-  const titleText = startDate && endDate
-    ? `Crime Counts from ${fmt(startDate)} to ${fmt(endDate)}`
-    : 'Crime Counts';
-
   // ── RENDER ──
+  if (loading) {
+    return <div>Loading crime data...</div>;
+  }
+
+  if (error) {
+    return <div>Error: {error}</div>;
+  }
+
+  if (!data.length) {
+    return <div>No crime data available for the selected date range.</div>;
+  }
+
   return (
     <div>
-      {/* Title */}
-      <h3 className="text-xl font-semibold mb-4">{titleText}</h3>
-
       <div className="flex">
         {/* Checkbox List */}
         <div
@@ -314,15 +391,15 @@ export default function InteractiveCrimeBarChart({ data, startDate, endDate }) {
           <div
             ref={tooltipRef}
             style={{
-              position:        'absolute',
-              opacity:         0,
-              pointerEvents:   'none',
+              position: 'absolute',
+              opacity: 0,
+              pointerEvents: 'none',
               backgroundColor: '#fff',
-              border:          '1px solid #ccc',
-              padding:         '6px',
-              borderRadius:    '4px',
-              fontSize:        '12px',
-              boxShadow:       '0px 0px 6px rgba(0,0,0,0.1)',
+              border: '1px solid #ccc',
+              padding: '6px',
+              borderRadius: '4px',
+              fontSize: '12px',
+              boxShadow: '0px 0px 6px rgba(0,0,0,0.1)',
             }}
           />
         </div>

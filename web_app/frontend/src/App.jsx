@@ -11,18 +11,15 @@ import AdvicePanel from './component/advice_panel';
 // Configure API base URL
 const API_BASE_URL = 'http://localhost:8001';
 
-
 export default function App() {
   // Date‐picker state (strings in "YYYY-MM-DD")
   const [startDate, setStartDate] = useState('');
-
-  const [endDate, setEndDate]   = useState('');
-  // Loaded and parsed CSV rows
+  const [endDate, setEndDate] = useState('');
   const [data, setData] = useState([]);
+  const [showBarChart, setShowBarChart] = useState(false);
 
   useEffect(() => {
     const csvUrl = '/data/Police_Department_Incident_Reports__2018_to_Present_20250507.csv';
-    // parse strings like "2023/03/01"
     const parseDate = d3.timeParse('%Y/%m/%d');
 
     d3.csv(csvUrl, row => ({
@@ -56,60 +53,56 @@ export default function App() {
             <p className="text-xs uppercase font-medium tracking-wide mb-1">
               San Francisco Police Department
             </p>
-            <h1 className="text-3xl font-bold mb-1">
+            <h2 className="text-3xl font-bold mb-1">
               Crime Data
-            </h1>
+            </h2>
             <p className="text-sm text-gray-600">
-              Comparing a Date Range within One Year to Its Prior Year
+              {/* Comparing a Date Range within One Year to Its Prior Year */}
             </p>
           </div>
         </header>
 
-        {/* Date Pickers */}
-        <div className="mb-6 flex space-x-4">
-          <label className="flex flex-col">
-            <span className="text-sm mb-1">Start Date</span>
-            <input
-              type="date"
-              value={startDate}
-              onChange={e => setStartDate(e.target.value)}
-              className="border rounded p-2"
-            />
-          </label>
-          <label className="flex flex-col">
-            <span className="text-sm mb-1">End Date</span>
+        {/* ── DATE PICKER + TOGGLE BUTTON ROW ── */}
+        <div className="flex items-center justify-between mb-6">
+        <label className="flex flex-col">
+        <span className="text-sm mb-1">End Date (Shows data for previous 30 days)</span>
             <input
               type="date"
               value={endDate}
               onChange={e => setEndDate(e.target.value)}
-              className="border rounded p-2"
+              className="border rounded p-2 flex-1 max-w-xs"
             />
           </label>
+
+          <button
+            onClick={() => setShowBarChart(!showBarChart)}
+            className="ml-4 px-4 py-2 bg-gray-100 text-gray-700 rounded hover:bg-gray-200 transition-colors flex items-center border border-gray-300"
+          >
+            {showBarChart ? 'Show HeatMap' : 'Show Bar Chart'}
+          </button>
         </div>
 
         {/* ── FLEXIBLE CONTAINER FOR BAR CHART + MAP ── */}
-        <div className="flex-1 flex flex-col space-y-6">
-          {/* Crime Trend Chart (takes half the space) */}
-          <div className="flex-1 border rounded-lg p-4 bg-white">
+        <div className="flex-1 border rounded-lg overflow-hidden">
+          {showBarChart ? (
             <InteractiveCrimeBarChart
               data={data}
               startDate={startDate ? new Date(startDate) : undefined}
-              endDate={endDate   ? new Date(endDate)   : undefined}
+              endDate={endDate ? new Date(endDate) : undefined}
             />
-          </div>
-
-          {/* Category Map Box (takes the other half) */}
-          <div className="flex-1 border rounded-lg p-4 flex flex-col bg-white">
-            <h2 className="text-lg font-medium mb-2">Category Map</h2>
-            <div className="flex-1">
-              <ExtractHeatMap />
-            </div>
-          </div>
+          ) : (
+            <ExtractHeatMap />
+          )}
         </div>
       </div>
 
       {/* ── RIGHT COLUMN ── */}
-      <aside className="flex-1 flex flex-col p-4 bg-white">
+      <aside className="flex-1 flex flex-col p-4 bg-white" style={{ 
+        maxHeight: 'calc(100vh - 2rem)', // Full height minus padding
+        overflowY: 'auto',
+        position: 'sticky',
+        top: '1rem'
+      }}>
         <section className="mb-6 border rounded-lg p-4 bg-white">
           <h2 className="text-xl font-semibold mb-3">Related News</h2>
           <NewsList endDate={endDate}/>

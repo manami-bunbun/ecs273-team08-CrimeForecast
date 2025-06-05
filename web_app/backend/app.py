@@ -35,12 +35,117 @@ app.add_middleware(
 async def root():
     return {"message": "Crime Forecast API"}
 
+@app.get("/api/crime-data")
+async def get_crime_data(
+    end_date: Optional[str] = None
+):
+    """Get crime data for the bar chart visualization"""
+    try:
+        query = {}
+        if end_date:
+            end_date_obj = datetime.strptime(end_date, "%Y-%m-%d")
+            start_date_obj = end_date_obj - timedelta(days=30)
+            query["incident_datetime"] = {
+                "$gte": start_date_obj.isoformat(),
+                "$lte": end_date_obj.isoformat()
+            }
 
-# Get relevant news articles for the last month before the specified end date
+        cursor = db.incidents.find(
+            query,
+            {"incident_category": 1, "incident_datetime": 1, "_id": 0}
+        )
+        
+        data = await cursor.to_list(length=None)
+        
+        # Clean and validate data before returning
+        valid_data = []
+        for item in data:
+            try:
+                # Ensure incident_datetime is valid
+                if isinstance(item.get('incident_datetime'), str):
+                    datetime.fromisoformat(item['incident_datetime'].replace('Z', ''))
+                else:
+                    continue
+                    
+                valid_data.append({
+                    'incident_datetime': item['incident_datetime'],
+                    'incident_category': item.get('incident_category', 'Unknown')
+                })
+            except (ValueError, TypeError):
+                continue
+                
+        return valid_data
+    except Exception as e:
+        logger.error(f"Error fetching crime data: {e}")
+        raise HTTPException(status_code=500, detail=str(e))
+
+@app.get("/api/crime-locations")
+async def get_crime_locations(
+    category: str,
+    end_date: Optional[str] = None
+):
+    """Get crime locations for the map visualization"""
+    try:
+        if end_date:
+            end_date_obj = datetime.strptime(end_date, "%Y-%m-%d")
+        else:
+            end_date_obj = datetime.now()
+            
+        start_date_obj = end_date_obj - timedelta(days=30)
+        
+        query = {
+            "incident_datetime": {
+                "$gte": start_date_obj.isoformat(),
+                "$lte": end_date_obj.isoformat()
+            }
+        }
+        
+        if category and category != "All":
+            query["incident_category"] = category
+
+        cursor = db.incidents.find(
+            query,
+            {
+                "latitude": 1,
+                "longitude": 1,
+                "incident_category": 1,
+                "_id": 0
+            }
+        )
+        
+        locations = await cursor.to_list(length=None)
+        
+        # Filter out records with invalid coordinates
+        valid_locations = []
+        for loc in locations:
+            try:
+                lat = float(loc.get('latitude', 0))
+                lon = float(loc.get('longitude', 0))
+                
+                # Check if coordinates are valid
+                if (lat != 0 and lon != 0 and 
+                    -90 <= lat <= 90 and 
+                    -180 <= lon <= 180 and
+                    not pd.isna(lat) and 
+                    not pd.isna(lon)):
+                    valid_locations.append({
+                        'latitude': lat,
+                        'longitude': lon,
+                        'incident_category': loc.get('incident_category', 'Unknown')
+                    })
+            except (ValueError, TypeError):
+                continue
+                
+        return valid_locations
+    except Exception as e:
+        logger.error(f"Error fetching crime locations: {e}")
+        raise HTTPException(status_code=500, detail=str(e))
+
 @app.get("/api/news", response_model=List[NewsItem])
 async def get_news(
     end_date: str = Query(..., description="End date in YYYY-MM-DD format")
 ):
+    """Get relevant news articles for the last month before the specified end date"""
     try:
         news_items = await fetch_sf_news(end_date)
         analyzed_news = await analyze_news_relevance_gpt(news_items)
@@ -48,28 +153,31 @@ async def get_news(
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))
 
-# Get comprehensive crime trend analysis with news integration and LLM insights
 @app.get("/api/analysis", response_model=AnalysisResponse)
 async def get_trend_analysis(
     end_date: str = Query(..., description="End date for analysis (YYYY-MM-DD)")
 ) -> AnalysisResponse:
+    """Get comprehensive crime trend analysis with news integration and LLM insights"""
     try:
         end_date_obj = datetime.strptime(end_date, "%Y-%m-%d")
         start_date_obj = end_date_obj - timedelta(days=30)
-        start_date = start_date_obj.strftime("%Y-%m-%d")
 
-        logger.info(f"Fetching crime data from {start_date} to {end_date}")
+        logger.info(f"Fetching crime data from {start_date_obj.isoformat()} to {end_date_obj.isoformat()}")
+
+        # Convert dates to ISO format strings for MongoDB query
+        query = {
+            "incident_datetime": {
+                "$gte": start_date_obj.isoformat(),
+                "$lte": end_date_obj.isoformat()
+            }
+        }
 
         crime_data = []
-        async for doc in db.incidents.find({
-            "incident_datetime": {
-                "$gte": start_date_obj,
-                "$lte": end_date_obj
-            }
-        }):
+        async for doc in db.incidents.find(query):
             crime_data.append(doc)
             
         if not crime_data:
+            logger.warning(f"No data found for date range: {start_date_obj.isoformat()} to {end_date_obj.isoformat()}")
             raise HTTPException(
                 status_code=404,
                 detail="No crime data found for the specified time range"

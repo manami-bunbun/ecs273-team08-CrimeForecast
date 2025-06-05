@@ -1,66 +1,125 @@
 import React, { useRef, useEffect, useState } from 'react';
 import mapboxgl from 'mapbox-gl';
-import Papa from 'papaparse';
 import 'mapbox-gl/dist/mapbox-gl.css';
+
+const API_BASE_URL = 'http://localhost:8001';
 
 export default function HeatMap() {
   const mapContainer = useRef(null);
   const mapRef = useRef(null);
 
-  // State to hold all parsed CSV rows
-  const [rows, setRows] = useState([]);
+  // State to hold crime data
+  const [data, setData] = useState([]);
+  const [loading, setLoading] = useState(false);
+  const [error, setError] = useState(null);
 
-  // Extracted unique categories from the CSV
+  // Extracted unique categories from the data
   const [categories, setCategories] = useState([]);
 
   // Currently selected category
-  const [selectedCategory, setSelectedCategory] = useState('');
+  const [selectedCategory, setSelectedCategory] = useState('All');
+
+  // Current end date (defaults to today)
+  const [endDate, setEndDate] = useState(new Date().toISOString().split('T')[0]);
 
   //
-  // 1) Load CSV once and extract rows + unique categories
+  // 1) Fetch data and extract categories
   //
   useEffect(() => {
-    Papa.parse(
-      '/data/Police_Department_Incident_Reports__2018_to_Present_20250507.csv',
-      {
-        header: true,
-        download: true,
-        dynamicTyping: true,
-        skipEmptyLines: true,
-        complete: (results) => {
-          const dataRows = results.data;
+    const fetchData = async () => {
+      setLoading(true);
+      setError(null);
 
-          // Save all rows into state
-          setRows(dataRows);
-
-          // Extract unique categories (sorted)
-          const uniqueCats = Array.from(
-            new Set(dataRows.map((r) => r['Incident Category']))
-          ).sort();
-          setCategories(uniqueCats);
-
-          // Default to the first category in the dropdown (if any)
-          if (uniqueCats.length > 0) {
-            setSelectedCategory(uniqueCats[0]);
+      try {
+        // Get current date for end date if not specified
+        const currentDate = new Date();
+        const endDateObj = endDate ? new Date(endDate) : currentDate;
+        
+        // Calculate start date (30 days before end date)
+        // const startDateObj = new Date(endDateObj);
+        // startDateObj.setDate(startDateObj.getDate() - 30);
+        
+        // Format dates for API
+        const formattedEndDate = endDateObj.toISOString().split('T')[0];
+        
+        // Use 'All' as default category if none selected
+        const categoryParam = selectedCategory || 'All';
+        
+        const response = await fetch(
+          `${API_BASE_URL}/api/crime-locations?category=${encodeURIComponent(categoryParam)}&end_date=${formattedEndDate}`,
+          {
+            method: 'GET',
+            headers: {
+              'Accept': 'application/json',
+              'Content-Type': 'application/json'
+            }
           }
-        },
-        error: (err) => {
-          console.error('PapaParse error:', err);
+        );
+
+        if (!response.ok) {
+          throw new Error(`HTTP error! status: ${response.status}`);
         }
+
+        const jsonData = await response.json();
+        
+        if (!Array.isArray(jsonData)) {
+          throw new Error('Invalid data format received from server');
+        }
+
+        // filter out invalid coordinates and ensure data is within date range
+        const validData = jsonData.filter(item => {
+          const lat = parseFloat(item.latitude);
+          const lon = parseFloat(item.longitude);
+          return !isNaN(lat) && !isNaN(lon) && 
+                 lat !== 0 && lon !== 0 &&
+                 lat >= -90 && lat <= 90 &&
+                 lon >= -180 && lon <= 180;
+        });
+
+        if (validData.length === 0) {
+          setData([]);
+          setCategories(['All']);
+          return;
+        }
+
+        setData(validData);
+
+        // Extract unique categories (sorted)
+        const uniqueCats = Array.from(
+          new Set(validData.map((r) => r.incident_category))
+        ).sort();
+        
+        setCategories(['All', ...uniqueCats]);
+
+        // Default to 'All' if no category is selected
+        if (!selectedCategory) {
+          setSelectedCategory('All');
+        }
+      } catch (err) {
+        setError(err.message);
+        console.error('Error fetching crime data:', err);
+        setData([]);
+        setCategories(['All']);
+      } finally {
+        setLoading(false);
       }
-    );
-  }, []);
+    };
+
+    fetchData();
+  }, [selectedCategory, endDate]);
 
   //
   // 2) Initialize the Mapbox map ONCE
   //
   useEffect(() => {
-    mapboxgl.accessToken =
-      'pk.eyJ1IjoibWVsaW5kYTAzMjYiLCJhIjoiY21iaGNrdDNrMDd4cjJscHFvcWxwa2NsbCJ9.xXrM3t_PX0ezAbpXwI41Cw';
+    if (mapRef.current) return;
+
+    mapboxgl.accessToken = 'pk.eyJ1IjoibWVsaW5kYTAzMjYiLCJhIjoiY21iaGNrdDNrMDd4cjJscHFvcWxwa2NsbCJ9.xXrM3t_PX0ezAbpXwI41Cw';
 
     const map = new mapboxgl.Map({
       container: mapContainer.current,
-      style: 'mapbox://styles/mapbox/streets-v11',
+      // style: 'mapbox://styles/mapbox/streets-v11',
+      style: 'mapbox://styles/mapbox/light-v11',
       center: [-122.4194, 37.7749],
       zoom: 12,
       maxZoom: 15
@@ -70,7 +129,7 @@ export default function HeatMap() {
     mapRef.current = map;
 
     map.on('style.load', () => {
-      // Add an empty GeoJSON source; we'll populate it when a category is selected
+      // Add an empty GeoJSON source; we'll populate it when data is loaded
       map.addSource('incidents', {
         type: 'geojson',
         data: {
@@ -112,7 +171,7 @@ export default function HeatMap() {
             ['linear'],
             ['heatmap-density'],
             0,
-            'rgba(0, 0, 255, 0)',     // fully transparent
+            'rgba(0, 0, 255, 0)', // fully transparent
             0.2,
             'rgb(103, 169, 207)',
             0.4,
@@ -150,108 +209,142 @@ export default function HeatMap() {
 
     // Clean up on unmount
     return () => {
-      if (mapRef.current) {
-        mapRef.current.remove();
+      map.remove();
         mapRef.current = null;
-      }
     };
   }, []);
 
   //
-  // 3) Re-filter rows & update map source whenever
-  //    - rows have finished loading, OR
-  //    - selectedCategory changes.
+  // 3) Update map source when data changes
   //
   useEffect(() => {
     const map = mapRef.current;
-    if (!map || rows.length === 0 || !selectedCategory) return;
+    if (!map || !data.length) return;
 
-    // Compute “one year ago” threshold
-    const oneYearAgo = new Date();
-    oneYearAgo.setFullYear(oneYearAgo.getFullYear() - 1);
+    // Wait for the map style to load if needed
+    if (!map.isStyleLoaded()) {
+      map.once('style.load', updateData);
+      return;
+    }
 
-    // Filter rows by:
-    //   • matching the selected category
-    //   • valid lat/lng
-    //   • date ≥ oneYearAgo
-    const filtered = rows.filter((row) => {
-      if (row['Incident Category'] !== selectedCategory) return false;
-
-      // Ensure latitude/longitude are present and numeric
-      if (
-        row['Latitude'] == null ||
-        row['Longitude'] == null ||
-        isNaN(row['Latitude']) ||
-        isNaN(row['Longitude'])
-      )
-        return false;
-
-      // Parse incident date
-      const incidentDate = new Date(row['Incident Date']);
-      if (isNaN(incidentDate.getTime())) return false;
-      if (incidentDate < oneYearAgo) return false;
-
-      return true;
-    });
-
-    // Build GeoJSON features from the filtered set
-    const features = filtered.map((row) => ({
+    function updateData() {
+      const features = data.map(item => ({
       type: 'Feature',
-      properties: { category: row['Incident Category'] },
+        properties: {},
       geometry: {
         type: 'Point',
-        coordinates: [row['Longitude'], row['Latitude']]
+          coordinates: [
+            parseFloat(item.longitude),
+            parseFloat(item.latitude)
+          ]
       }
     }));
 
-    const geojsonData = {
+      const source = map.getSource('incidents');
+      if (source) {
+        source.setData({
       type: 'FeatureCollection',
       features: features
-    };
-
-    // Update the “incidents” source data
-    if (map.getSource('incidents')) {
-      map.getSource('incidents').setData(geojsonData);
+        });
+      }
     }
-  }, [rows, selectedCategory]);
+
+    updateData();
+  }, [data]);
 
   return (
-    <div style={{ display: 'flex', flexDirection: 'column', height: '100vh' }}>
-      {/* ── Header + Dropdown ── */}
-      <div style={{ textAlign: 'center', margin: '10px 0' }}>
-        <h2 style={{ fontSize: '1rem', fontWeight: '500' }}>
-          {selectedCategory
-            ? `${selectedCategory} (Past 12 Months)`
-            : 'Select a Category'}
-        </h2>
+    <>
+      <div style={{ display: 'flex', flexDirection: 'column', height: '100vh' }}>
+        {/* ── Header + Dropdown ── */}
+        <div style={{ textAlign: 'center', margin: '10px 0' }}>
+          <h2 style={{ fontSize: '1rem', fontWeight: '500' }}>
+            {selectedCategory === 'All' ? 'Select Category' : ''}
+          </h2>
 
-        <select
-          value={selectedCategory}
-          onChange={(e) => setSelectedCategory(e.target.value)}
+          <select
+            value={selectedCategory}
+            onChange={(e) => setSelectedCategory(e.target.value)}
+            style={{
+              padding: '6px 10px',
+              fontSize: '1rem',
+              borderRadius: '4px',
+              border: '1px solid #ccc'
+            }}
+          >
+            {categories.map((cat) => (
+              <option key={cat} value={cat}>
+                {cat}
+              </option>
+            ))}
+          </select>
+        </div>
+
+        {/* ── Map Container ── */}
+        <div
+          ref={mapContainer}
           style={{
-            padding: '6px 10px',
-            fontSize: '1rem',
-            borderRadius: '4px',
-            border: '1px solid #ccc'
+            flex: 1,
+            width: '100%',
+            position: 'relative'
           }}
         >
-          {categories.map((cat) => (
-            <option key={cat} value={cat}>
-              {cat}
-            </option>
-          ))}
-        </select>
+          {loading && (
+            <div
+              style={{
+                position: 'absolute',
+                top: '10px',
+                left: '10px',
+                backgroundColor: 'rgba(255, 255, 255, 0.9)',
+                padding: '8px 12px',
+                borderRadius: '4px',
+                boxShadow: '0 2px 4px rgba(0,0,0,0.1)',
+                zIndex: 1000,
+                display: 'flex',
+                alignItems: 'center',
+                gap: '8px',
+                fontSize: '14px',
+                color: '#666'
+              }}
+            >
+              <div
+                style={{
+                  width: '16px',
+                  height: '16px',
+                  border: '2px solid #666',
+                  borderTopColor: 'transparent',
+                  borderRadius: '50%',
+                  animation: 'spin 1s linear infinite'
+                }}
+              />
+              Loading map data...
+            </div>
+          )}
+        </div>
+
+        {error && (
+          <div style={{ 
+            position: 'absolute', 
+            top: '50%', 
+            left: '50%', 
+            transform: 'translate(-50%, -50%)',
+            background: 'rgba(255, 0, 0, 0.1)',
+            padding: '1rem',
+            borderRadius: '4px'
+          }}>
+            {error}
+          </div>
+        )}
       </div>
 
-      {/* ── Map Container ── */}
-      <div
-        ref={mapContainer}
-        style={{
-          flex: 1,
-          width: '100%',
-          position: 'relative'
-        }}
-      />
-    </div>
+      <style>
+        {`
+          @keyframes spin {
+            to {
+              transform: rotate(360deg);
+            }
+          }
+        `}
+      </style>
+    </>
   );
 }

@@ -1,3 +1,7 @@
+"""
+This file collects news from Google News to feed the LLM.
+"""
+
 from typing import List, Dict, Optional
 from datetime import datetime, timedelta
 from openai import OpenAI
@@ -13,11 +17,12 @@ from urllib.parse import quote, urlencode
 import re
 import logging
 
-# Set up logging
-logging.basicConfig(level=logging.INFO)
-logger = logging.getLogger(__name__)
+
 
 load_dotenv()
+
+logging.basicConfig(level=logging.INFO)
+logger = logging.getLogger(__name__)
 
 client = OpenAI(
     api_key=os.getenv("OPENAI_API_KEY"),
@@ -38,6 +43,7 @@ class NewsItem(BaseModel):
             "link": self.link,
             "published_date": self.published_date
         }
+
 
 # Convert relative date strings to ISO format dates
 def parse_relative_date(date_str: str) -> str:
@@ -139,7 +145,7 @@ async def fetch_sf_news(end_date: str) -> List[Dict]:
                         
               
                         if not any(keyword.lower() in title.lower() for keyword in ["SF", "San Francisco", "Bay Area"]):
-                            logger.info("Article not relevant to SF, skipping")
+                            # logger.info("Article not relevant to SF, skipping")
                             continue
                             
                 
@@ -159,7 +165,7 @@ async def fetch_sf_news(end_date: str) -> List[Dict]:
                         }
                         
                         results.append(news_item)
-                        logger.info("Article added to results")
+                        # logger.info("Article added to results")
                         
                     except Exception as e:
                         logger.error(f"Error processing article: {str(e)}")
@@ -171,101 +177,3 @@ async def fetch_sf_news(end_date: str) -> List[Dict]:
     except Exception as e:
         logger.error(f"Error fetching news: {str(e)}")
         return []
-
-
-async def analyze_news_relevance(news_items: List[Dict], trends: dict) -> List[Dict]:
-    analyzed_news = []
-    for item in news_items:
-        # Calculate relevance score based on trend keywords in title and summary
-        score = 0.0
-        text = (item.get('title', '') + " " + item.get('summary', '')).lower()
-        
-        # Check for crime types from trends
-        if 'crime_trends' in trends:
-            for crime_type, trend in trends['crime_trends'].items():
-                if crime_type.lower() in text:
-                    score += 0.5
-        
-        # Check for trend-related keywords
-        trend_keywords = ["crime", "incident", "arrest", "police", "safety", "victim", 
-                         "violence", "theft", "robbery", "assault", "burglary"]
-        
-        for keyword in trend_keywords:
-            if keyword in text:
-                score += 0.2
-                
-        # Add location relevance
-        location_keywords = ["san francisco", "sf", "bay area", "mission", "tenderloin", 
-                           "soma", "downtown", "civic center"]
-        for keyword in location_keywords:
-            if keyword in text:
-                score += 0.3
-                
-     
-        item['relevance_score'] = min(score, 1.0)
-        analyzed_news.append(item)
-        
-    # Sort by relevance score
-    analyzed_news.sort(key=lambda x: x['relevance_score'], reverse=True)
-    return analyzed_news
-
-
-async def analyze_news_relevance_gpt(news_items: List[Dict]) -> List[Dict]:
-    if not news_items:
-        return []
-        
-    try:
-        for news in news_items:
-            if 'relevance_score' not in news:
-                news['relevance_score'] = 1.0
-        
-        news_texts = []
-        for i, news in enumerate(news_items, 1):
-            news_text = f"{i}. Title: {news.get('title', '')}\nSummary: {news.get('summary', '')}\n"
-            news_texts.append(news_text)
-            
-        all_news = '\n'.join(news_texts)
-        prompt = (
-            "Analyze these news articles about crime in San Francisco:\n\n"
-            f"{all_news}\n\n"
-            "For each article, provide:\n"
-            "1. A brief summary of the key points\n"
-            "2. The implications for public safety\n"
-            "3. Any actionable recommendations for residents\n\n"
-            "Format your response as a JSON object with numbered articles as keys."
-        )
-
-        response = await client.chat.completions.create(
-            model="gpt-4o",
-            messages=[
-                {"role": "system", "content": "You are a helpful assistant that analyzes news articles about crime and safety in San Francisco."},
-                {"role": "user", "content": prompt}
-            ],
-            temperature=0.7,
-            max_tokens=1000
-        )
-        
-        analysis = response.choices[0].message.content
-        
-        try:
-            analysis_dict = json.loads(analysis)
-            for i, news in enumerate(news_items, 1):
-                key = str(i)
-                if key in analysis_dict:
-                    if isinstance(analysis_dict[key], dict):
-                        news['gpt_analysis'] = analysis_dict[key]
-                    else:
-                        news['gpt_analysis'] = {"analysis": analysis_dict[key]}
-                        
-        except json.JSONDecodeError as e:
-            logger.error(f"Error parsing GPT response as JSON: {str(e)}")
-
-            for news in news_items:
-                news['gpt_analysis'] = {"analysis": analysis}
-                
-        return news_items
-        
-    except Exception as e:
-        logger.error(f"Error in LLM analysis: {str(e)}")
-
-        return news_items 

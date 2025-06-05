@@ -1,3 +1,6 @@
+"""
+This file is the LLM analysis based on the trend analysis output and news.
+"""
 from typing import List, Dict
 from openai import OpenAI
 import os
@@ -22,8 +25,10 @@ def format_news_for_prompt(news_items: List[Dict]) -> str:
         
     return "\n".join([
         f"- {item.get('title', '')} ({item.get('published_date', 'N/A')}): {item.get('summary', 'No summary available')}"
-        for item in sorted(news_items, key=lambda x: x.get('relevance_score', 0), reverse=True)[:5]
+        for item in news_items
     ])
+
+
 
 async def analyze_trends_and_news(trend_data: TrendData) -> LLMAnalysis:
     try:
@@ -33,17 +38,24 @@ async def analyze_trends_and_news(trend_data: TrendData) -> LLMAnalysis:
             model="gpt-4o",
             # we use LLM to generate the prompt here
             messages=[ 
-                {"role": "system", "content": "You are a crime analysis expert. Provide a concise analysis focusing on practical safety advice. You must respond with valid JSON only, without any additional text or formatting."},
+                {"role": "system", "content": """You are a crime analysis expert. Your task is to:
+                1. Analyze crime trends and news
+                2. Select the top 5 most relevant news items that are most important for public safety
+                3. Provide practical safety advice
+                You must respond with valid JSON only, without any additional text or formatting."""},
                 {"role": "user", "content": """Please analyze the following data and respond with a JSON object in this exact format:
                         {
                             "trend_summary": "A clear and concise 2-3 sentence summary of the main crime trends",
+                            "selected_news_indices": [0, 1, 2, 3, 4],
                             "safety_recommendations": [
                                 "Specific and actionable safety recommendation 1",
                                 "Specific and actionable safety recommendation 2",
                                 "Specific and actionable safety recommendation 3"
                             ]
-                        }"""},
-                                        {"role": "user", "content": f"""Crime trends in San Francisco from {trend_data.time_period}:
+                        }
+                        
+                        Note: selected_news_indices should contain the indices (0-based) of the 5 most relevant news items from the provided list."""},
+                {"role": "user", "content": f"""Crime trends in San Francisco from {trend_data.time_period}:
 
                         Crime Trends: {json.dumps(trend_data.crime_trends, indent=2)}
                         Temporal Patterns: {json.dumps(trend_data.temporal_patterns, indent=2)}
@@ -56,6 +68,7 @@ async def analyze_trends_and_news(trend_data: TrendData) -> LLMAnalysis:
         
         try:
             content = response.choices[0].message.content.strip()
+            
             # Remove any potential markdown formatting
             if content.startswith("```json"):
                 content = content[7:]
@@ -65,9 +78,17 @@ async def analyze_trends_and_news(trend_data: TrendData) -> LLMAnalysis:
             
             analysis = json.loads(content)
             
+            # Get the selected news items using the indices provided by LLM
+            selected_indices = analysis.get("selected_news_indices", [])[:5]  # Ensure max 5 items
+            selected_news = []
+            if trend_data.relevant_news:
+                for idx in selected_indices:
+                    if idx < len(trend_data.relevant_news):
+                        selected_news.append(trend_data.relevant_news[idx])
+            
             return LLMAnalysis(
                 trend_summary=analysis["trend_summary"],
-                relevant_news=trend_data.relevant_news[:5] if trend_data.relevant_news else [],
+                relevant_news=selected_news,
                 safety_recommendations=analysis["safety_recommendations"]
             )
         except json.JSONDecodeError as e:

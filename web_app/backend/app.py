@@ -1,9 +1,13 @@
+"""
+This file is the main file for the backend of the crime forecast web app API.
+"""
+
 from fastapi import FastAPI, Query, HTTPException
 from fastapi.middleware.cors import CORSMiddleware
 from typing import List, Optional
 from datetime import datetime, timedelta
 from motor.motor_asyncio import AsyncIOMotorClient
-from utils.news_utils import fetch_sf_news, analyze_news_relevance, analyze_news_relevance_gpt
+from utils.news_utils import fetch_sf_news
 from utils.data_schema import NewsItem, TrendAnalysis, LLMAnalysis, AnalysisResponse
 from dotenv import load_dotenv
 import os
@@ -33,16 +37,16 @@ app.add_middleware(
 
 @app.get("/")
 async def root():
-    return {"message": "Crime Forecast API"}
+    return {"message": "Crime Forecast Web App"}
 
+# Get crime data for the bar chart visualization
 @app.get("/api/crime-data")
 async def get_crime_data(
     end_date: Optional[str] = None
 ):
-    """Get crime data for the bar chart visualization"""
     try:
         query = {}
-        if end_date:
+        if end_date: # end date - 30 days
             end_date_obj = datetime.strptime(end_date, "%Y-%m-%d")
             start_date_obj = end_date_obj - timedelta(days=30)
             query["incident_datetime"] = {
@@ -79,12 +83,12 @@ async def get_crime_data(
         logger.error(f"Error fetching crime data: {e}")
         raise HTTPException(status_code=500, detail=str(e))
 
+# Get crime locations for the heat map visualization
 @app.get("/api/crime-locations")
 async def get_crime_locations(
     category: str,
     end_date: Optional[str] = None
 ):
-    """Get crime locations for the map visualization"""
     try:
         if end_date:
             end_date_obj = datetime.strptime(end_date, "%Y-%m-%d")
@@ -122,7 +126,7 @@ async def get_crime_locations(
                 lat = float(loc.get('latitude', 0))
                 lon = float(loc.get('longitude', 0))
                 
-                # Check if coordinates are valid
+                # Check if coordinates are valid, just in case
                 if (lat != 0 and lon != 0 and 
                     -90 <= lat <= 90 and 
                     -180 <= lon <= 180 and
@@ -141,30 +145,22 @@ async def get_crime_locations(
         logger.error(f"Error fetching crime locations: {e}")
         raise HTTPException(status_code=500, detail=str(e))
 
-@app.get("/api/news", response_model=List[NewsItem])
-async def get_news(
-    end_date: str = Query(..., description="End date in YYYY-MM-DD format")
-):
-    """Get relevant news articles for the last month before the specified end date"""
-    try:
-        news_items = await fetch_sf_news(end_date)
-        analyzed_news = await analyze_news_relevance_gpt(news_items)
-        return analyzed_news[:5]
-    except Exception as e:
-        raise HTTPException(status_code=500, detail=str(e))
 
+
+
+# Run trend analysis for the trend section to feed the LLM (to avoid hallucination)
+# Get news for the news section (LLM selected 5 news among these)
 @app.get("/api/analysis", response_model=AnalysisResponse)
 async def get_trend_analysis(
     end_date: str = Query(..., description="End date for analysis (YYYY-MM-DD)")
 ) -> AnalysisResponse:
-    """Get comprehensive crime trend analysis with news integration and LLM insights"""
     try:
         end_date_obj = datetime.strptime(end_date, "%Y-%m-%d")
         start_date_obj = end_date_obj - timedelta(days=30)
 
         logger.info(f"Fetching crime data from {start_date_obj.isoformat()} to {end_date_obj.isoformat()}")
 
-        # Convert dates to ISO format strings for MongoDB query
+        # Convert dates to ISO format strings for MongoDB query 
         query = {
             "incident_datetime": {
                 "$gte": start_date_obj.isoformat(),

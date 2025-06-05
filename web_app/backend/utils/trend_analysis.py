@@ -1,3 +1,12 @@
+"""
+This file is the trend analysis to feed the LLM.
+Analysis
+1. Crime trends : percentage change of crime count in the last month compared to the average of the previous 5 months
+2. Temporal patterns : hourly and daily patterns of crime in the last month
+3. Location patterns : crime count in the last month by police district
+4. Relevant news : 20 most relevant news to the crime forecast (to lower the LLM costs)
+"""
+
 from typing import List, Dict, Optional
 import pandas as pd
 import numpy as np
@@ -75,7 +84,7 @@ async def analyze_crime_trends(
             crime_trends=crime_trends,
             temporal_patterns=temporal_patterns,
             location_patterns=location_patterns,
-            relevant_news=news_items[:5] if news_items else None
+            relevant_news=news_items[:20] if news_items else None
         )
         
     except Exception as e:

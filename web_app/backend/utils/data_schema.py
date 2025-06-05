@@ -4,9 +4,9 @@ from datetime import datetime
 
 class NewsItem(BaseModel):
     title: str
-    link: str
-    published_date: str
     summary: str
+    link: Optional[str] = None
+    published_date: Optional[str] = None
     relevance_score: float = 0.0
 
 class CrimeTrend(BaseModel):
@@ -18,38 +18,19 @@ class CrimeTrend(BaseModel):
 class TrendAnalysis(BaseModel):
     time_period: str
     crime_trends: Dict[str, float]
-    pattern_description: str
-    contributing_factors: List[str]
-    news_context: str
-    recommendations: List[str]
+    temporal_patterns: Dict[str, Dict[str, int]]
+    location_patterns: Dict[str, int]
+    pattern_description: Optional[str] = None
+    contributing_factors: Optional[List[str]] = None
+    news_context: Optional[str] = None
+    recommendations: Optional[List[str]] = None
 
 class LLMAnalysis(BaseModel):
     trend_summary: str
-    relevant_news: List[NewsItem]
+    relevant_news: List[Dict]
     safety_recommendations: List[str]
-    risk_areas: List[str]
-    confidence_score: float
 
 class AnalysisResponse(BaseModel):
-    trends: TrendAnalysis
-    news: List[NewsItem]
-    llm_analysis: LLMAnalysis
-
-class HeatmapData(BaseModel):
-    latitude: float
-    longitude: float
-    risk_score: float
-    district: str
-
-class LLMAdvice(BaseModel):
-    area_name: str
-    risk_level: str
-    summary: str
-    recommendations: List[str]
-    relevant_factors: List[str]
-
-class AreaAnalysis(BaseModel):
-    area_name: str
-    heatmap_data: HeatmapData
-    news_items: List[NewsItem]
-    llm_advice: LLMAdvice 
+    trends: Dict
+    news: List[Dict]
+    llm_analysis: Dict 

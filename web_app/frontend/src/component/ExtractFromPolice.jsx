@@ -14,13 +14,56 @@ export default function HeatMap() {
   const [error, setError] = useState(null);
 
   // Extracted unique categories from the data
-  const [categories, setCategories] = useState([]);
+  const [categories, setCategories] = useState(['All']);
+  const [allCategories, setAllCategories] = useState(['All']);
 
   // Currently selected category
   const [selectedCategory, setSelectedCategory] = useState('All');
 
   // Current end date (defaults to today)
   const [endDate, setEndDate] = useState(new Date().toISOString().split('T')[0]);
+
+  // Fetch all categories once when component mounts
+  useEffect(() => {
+    const fetchAllCategories = async () => {
+      try {
+        const response = await fetch(
+          `${API_BASE_URL}/api/crime-locations?category=All&end_date=${new Date().toISOString().split('T')[0]}`,
+          {
+            method: 'GET',
+            headers: {
+              'Accept': 'application/json',
+              'Content-Type': 'application/json'
+            }
+          }
+        );
+
+        if (!response.ok) {
+          throw new Error(`HTTP error! status: ${response.status}`);
+        }
+
+        const jsonData = await response.json();
+        
+        if (!Array.isArray(jsonData)) {
+          throw new Error('Invalid data format received from server');
+        }
+
+        // Extract unique categories (sorted)
+        const uniqueCats = Array.from(
+          new Set(jsonData.map((r) => r.incident_category))
+        ).sort();
+        
+        setAllCategories(['All', ...uniqueCats]);
+        setCategories(['All', ...uniqueCats]);
+      } catch (err) {
+        console.error('Error fetching categories:', err);
+        setAllCategories(['All']);
+        setCategories(['All']);
+      }
+    };
+
+    fetchAllCategories();
+  }, []);
 
   //
   // 1) Fetch data and extract categories
@@ -34,10 +77,6 @@ export default function HeatMap() {
         // Get current date for end date if not specified
         const currentDate = new Date();
         const endDateObj = endDate ? new Date(endDate) : currentDate;
-        
-        // Calculate start date (30 days before end date)
-        // const startDateObj = new Date(endDateObj);
-        // startDateObj.setDate(startDateObj.getDate() - 30);
         
         // Format dates for API
         const formattedEndDate = endDateObj.toISOString().split('T')[0];
@@ -78,28 +117,15 @@ export default function HeatMap() {
 
         if (validData.length === 0) {
           setData([]);
-          setCategories(['All']);
           return;
         }
 
         setData(validData);
 
-        // Extract unique categories (sorted)
-        const uniqueCats = Array.from(
-          new Set(validData.map((r) => r.incident_category))
-        ).sort();
-        
-        setCategories(['All', ...uniqueCats]);
-
-        // Default to 'All' if no category is selected
-        if (!selectedCategory) {
-          setSelectedCategory('All');
-        }
       } catch (err) {
         setError(err.message);
         console.error('Error fetching crime data:', err);
         setData([]);
-        setCategories(['All']);
       } finally {
         setLoading(false);
       }
@@ -118,8 +144,8 @@ export default function HeatMap() {
 
     const map = new mapboxgl.Map({
       container: mapContainer.current,
-      // style: 'mapbox://styles/mapbox/streets-v11',
-      style: 'mapbox://styles/mapbox/light-v11',
+      style: 'mapbox://styles/mapbox/streets-v11',
+      // style: 'mapbox://styles/mapbox/light-v11',
       center: [-122.4194, 37.7749],
       zoom: 12,
       maxZoom: 15
@@ -171,7 +197,7 @@ export default function HeatMap() {
             ['linear'],
             ['heatmap-density'],
             0,
-            'rgba(0, 0, 255, 0)', // fully transparent
+            'rgba(0, 0, 255, 0)', 
             0.2,
             'rgb(103, 169, 207)',
             0.4,

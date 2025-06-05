@@ -129,33 +129,33 @@ export default function NewsList({ endDate }) {
 }
 
 function readNewsFile(text) {
-    const blocks = text.split(/\r?\n\s*\r?\n/);
+  const blocks = text.split(/\r?\n\s*\r?\n/);
     const news = [];
 
     blocks.forEach(b => {
-        const lines = b.trim().split(/\r?\n/);
-        if (lines.length < 4) return;
+      const lines = b.trim().split(/\r?\n/);
+      if (lines.length < 4) return;
 
-        const titleLine = lines.find(line => line.startsWith("Title:"));
-        const dateLine = lines.find(line => line.startsWith("Date:"));
-        const urlLine = lines.find(line => line.startsWith("URL:"));
-        const contentIndex = lines.findIndex(line => line.startsWith("Content:"));
+      const titleLine = lines.find(line => line.startsWith("Title:"));
+      const dateLine = lines.find(line => line.startsWith("Date:"));
+      const urlLine = lines.find(line => line.startsWith("URL:"));
+      const contentIndex = lines.findIndex(line => line.startsWith("Content:"));
 
-        if (!titleLine || !dateLine || contentIndex === -1) return;
+      if (!titleLine || !dateLine || contentIndex === -1) return;
 
-        const title = titleLine.slice(6).trim();
-        const dateStr = dateLine.slice(5).trim();
-        const url = urlLine ? urlLine.slice(4).trim() : null;
-        const content = lines.slice(contentIndex + 1).join("\n").trim();
+      const title = titleLine.slice(6).trim();
+      const dateStr = dateLine.slice(5).trim();
+      const url = urlLine ? urlLine.slice(4).trim() : null;
+      const content = lines.slice(contentIndex + 1).join("\n").trim();
 
-        news.push({
-            title,
-            date: new Date(dateStr),
-            url,
-            content,
-        });
+      news.push({
+        title,
+        date: new Date(dateStr),
+        url,
+        content,
     });
-
+  });
+ 
     return news;
 }
 

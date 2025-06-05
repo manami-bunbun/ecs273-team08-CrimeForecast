@@ -46,13 +46,36 @@ async def get_crime_data(
 ):
     try:
         query = {}
-        if end_date: # end date - 30 days
+        latest_doc = await db.incidents.find_one(
+            sort=[("incident_datetime", -1)],
+            projection={"incident_datetime": 1, "_id": 0}
+        )
+
+        if not latest_doc or "incident_datetime" not in latest_doc:
+            raise HTTPException(status_code=500, detail="No data available in the database.")
+
+        latest_date = datetime.fromisoformat(latest_doc["incident_datetime"].replace("Z", ""))
+
+        if end_date:
             end_date_obj = datetime.strptime(end_date, "%Y-%m-%d")
+
+            # Check if the given end_date exceeds the latest available data
+            if end_date_obj > latest_date:
+                raise HTTPException(
+                    status_code=400,
+                    detail=f"Selected date exceeds the latest available data. Data is only available up to {latest_date.strftime('%Y-%m-%d')}."
+                )
+
+
             start_date_obj = end_date_obj - timedelta(days=30)
             query["incident_datetime"] = {
                 "$gte": start_date_obj.isoformat(),
                 "$lte": end_date_obj.isoformat()
             }
+        
+        count = await db.incidents.count_documents(query)
+        if count == 0:
+            return []  
 
         cursor = db.incidents.find(
             query,
@@ -83,6 +106,8 @@ async def get_crime_data(
         logger.error(f"Error fetching crime data: {e}")
         raise HTTPException(status_code=500, detail=str(e))
 
+
+
 # Get crime locations for the heat map visualization
 @app.get("/api/crime-locations")
 async def get_crime_locations(
@@ -90,13 +115,21 @@ async def get_crime_locations(
     end_date: Optional[str] = None
 ):
     try:
+        # Parse end date
         if end_date:
-            end_date_obj = datetime.strptime(end_date, "%Y-%m-%d")
+            try:
+                end_date_obj = datetime.strptime(end_date, "%Y-%m-%d")
+            except ValueError:
+                raise HTTPException(
+                    status_code=400,
+                    detail="Invalid date format. Please use YYYY-MM-DD"
+                )
         else:
             end_date_obj = datetime.now()
             
         start_date_obj = end_date_obj - timedelta(days=30)
         
+        # Build query with date range
         query = {
             "incident_datetime": {
                 "$gte": start_date_obj.isoformat(),
@@ -107,26 +140,37 @@ async def get_crime_locations(
         if category and category != "All":
             query["incident_category"] = category
 
+        # First check if any data exists for the date range
+        count = await db.incidents.count_documents(query)
+        if count == 0:
+            return []  # Return empty list if no data found
+
         cursor = db.incidents.find(
             query,
             {
                 "latitude": 1,
                 "longitude": 1,
                 "incident_category": 1,
+                "incident_datetime": 1,  # Add this to verify dates
                 "_id": 0
             }
         )
         
         locations = await cursor.to_list(length=None)
         
-        # Filter out records with invalid coordinates
+        # Filter out records with invalid coordinates or dates
         valid_locations = []
         for loc in locations:
             try:
                 lat = float(loc.get('latitude', 0))
                 lon = float(loc.get('longitude', 0))
                 
-                # Check if coordinates are valid, just in case
+                # Verify the date is within range
+                incident_date = datetime.fromisoformat(loc['incident_datetime'].replace('Z', ''))
+                if not (start_date_obj <= incident_date <= end_date_obj):
+                    continue
+                
+                # Check if coordinates are valid
                 if (lat != 0 and lon != 0 and 
                     -90 <= lat <= 90 and 
                     -180 <= lon <= 180 and
@@ -135,11 +179,15 @@ async def get_crime_locations(
                     valid_locations.append({
                         'latitude': lat,
                         'longitude': lon,
-                        'incident_category': loc.get('incident_category', 'Unknown')
+                        'incident_category': loc.get('incident_category', 'Unknown'),
+                        'incident_datetime': loc['incident_datetime']
                     })
             except (ValueError, TypeError):
                 continue
                 
+        if not valid_locations:
+            return []  # Return empty list if no valid locations found
+            
         return valid_locations
     except Exception as e:
         logger.error(f"Error fetching crime locations: {e}")

@@ -102,3 +102,4 @@ async def import_crime_data():
 if __name__ == "__main__":
     import asyncio
     asyncio.run(import_crime_data()) 
+ 

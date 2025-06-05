@@ -1,161 +1,3 @@
-// // src/InteractiveCrimeBarChart.jsx
-// import React, { useRef, useEffect, useMemo, useState } from 'react';
-// import * as d3 from 'd3';
-
-// export default function InteractiveCrimeBarChart({ data, startDate, endDate }) {
-//   const svgRef     = useRef();
-//   const tooltipRef = useRef();
-
-//   // ── CHART DIMENSIONS ──
-//   const width   = 1000;
-//   const height  = 500;
-//   const margin  = { top: 40, right: 20, bottom: 150, left: 100 };
-
-//   // ── CATEGORY SELECTION ──
-//   const allCategories = useMemo(
-//     () => Array.from(new Set(data.map(d => d.category))).sort(),
-//     [data]
-//   );
-//   const [selectedCats, setSelectedCats] = useState(allCategories);
-//   useEffect(() => setSelectedCats(allCategories), [allCategories]);
-
-//   // ── FILTER & AGGREGATE ──
-//   const aggregated = useMemo(() => {
-//     const filtered = data.filter(d =>
-//       (!startDate || d.date >= startDate) &&
-//       (!endDate   || d.date <= endDate) &&
-//       selectedCats.includes(d.category)
-//     );
-//     const counts = d3.rollup(filtered, v => v.length, d => d.category);
-//     return Array.from(counts, ([category, count]) => ({ category, count }))
-//                 .sort((a, b) => b.count - a.count);
-//   }, [data, startDate, endDate, selectedCats]);
-
-//   // ── DRAW ──
-//   useEffect(() => {
-//     const svg     = d3.select(svgRef.current);
-//     const tooltip = d3.select(tooltipRef.current);
-//     svg.selectAll('*').remove();
-
-//     // scales
-//     const x = d3.scaleBand()
-//       .domain(aggregated.map(d => d.category))
-//       .range([margin.left, width - margin.right])
-//       .padding(0.2);
-
-//     const y = d3.scaleLinear()
-//       .domain([0, d3.max(aggregated, d => d.count) || 0])
-//       .nice()
-//       .range([height - margin.bottom, margin.top]);
-
-//     // axes
-//     svg.append('g')
-//       .attr('transform', `translate(0,${height - margin.bottom})`)
-//       .call(d3.axisBottom(x))
-//       .selectAll('text')
-//         .attr('transform', 'rotate(-45)')
-//         .style('text-anchor', 'end');
-
-//     svg.append('g')
-//       .attr('transform', `translate(${margin.left},0)`)
-//       .call(d3.axisLeft(y));
-
-//     // bars + tooltip
-//     svg.selectAll('.bar')
-//       .data(aggregated)
-//       .join('rect')
-//         .attr('class', 'bar')
-//         .attr('x',      d => x(d.category))
-//         .attr('y',      d => y(d.count))
-//         .attr('width',  x.bandwidth())
-//         .attr('height', d => height - margin.bottom - y(d.count))
-//         .on('mouseover', (event, d) => {
-//           const rect = svgRef.current.getBoundingClientRect();
-//           tooltip
-//             .style('opacity', 1)
-//             .html(`<strong>${d.category}</strong><br/>Count: ${d.count}`)
-//             .style('left',  (event.clientX - rect.left + 10) + 'px')
-//             .style('top',   (event.clientY - rect.top + 10) + 'px');
-//         })
-//         .on('mousemove', event => {
-//           const rect = svgRef.current.getBoundingClientRect();
-//           tooltip
-//             .style('left', (event.clientX - rect.left + 10) + 'px')
-//             .style('top',  (event.clientY - rect.top + 10) + 'px');
-//         })
-//         .on('mouseout', () => {
-//           tooltip.style('opacity', 0);
-//         });
-//   }, [aggregated]);
-
-//   // ── CATEGORY TOGGLE ──
-//   const toggleCategory = (cat) =>
-//     setSelectedCats(prev =>
-//       prev.includes(cat)
-//         ? prev.filter(c => c !== cat)
-//         : [...prev, cat]
-//     );
-
-//   // ── TITLE FORMATTING ──
-//   const fmt = d3.timeFormat('%Y-%m-%d');
-//   const titleText = startDate && endDate
-//     ? `Crime Counts from ${fmt(startDate)} to ${fmt(endDate)}`
-//     : 'Crime Counts';
-
-//   // ── RENDER ──
-//   return (
-//     <div>
-//       {/* Title */}
-//       <h3 className="text-xl font-semibold mb-4">{titleText}</h3>
-
-//       <div className="flex">
-//         {/* Checkbox List */}
-//         <div
-//           className="w-48 overflow-auto pr-4"
-//           style={{ maxHeight: height }}
-//         >
-//           {allCategories.map(cat => (
-//             <label key={cat} className="block text-sm mb-1">
-//               <input
-//                 type="checkbox"
-//                 className="mr-2"
-//                 checked={selectedCats.includes(cat)}
-//                 onChange={() => toggleCategory(cat)}
-//               />
-//               {cat}
-//             </label>
-//           ))}
-//         </div>
-
-//         {/* SVG + Tooltip */}
-//         <div className="flex-1 relative">
-//           <svg
-//             ref={svgRef}
-//             viewBox={`0 0 ${width} ${height}`}
-//             preserveAspectRatio="xMinYMin meet"
-//             style={{ width: '100%', height: '100%' }}
-//           />
-//           <div
-//             ref={tooltipRef}
-//             style={{
-//               position:      'absolute',
-//               opacity:       0,
-//               pointerEvents: 'none',
-//               backgroundColor: '#fff',
-//               border:        '1px solid #ccc',
-//               padding:       '6px',
-//               borderRadius:  '4px',
-//               fontSize:      '12px',
-//               boxShadow:     '0px 0px 6px rgba(0,0,0,0.1)'
-//             }}
-//           />
-//         </div>
-//       </div>
-//     </div>
-//   );
-// }
-
-// src/InteractiveCrimeBarChart.jsx
 import React, { useRef, useEffect, useMemo, useState } from 'react';
 import * as d3 from 'd3';
 
@@ -407,3 +249,161 @@ export default function InteractiveCrimeBarChart({ endDate }) {
     </div>
   );
 }
+
+// (shows from csv)
+// // src/InteractiveCrimeBarChart.jsx
+// import React, { useRef, useEffect, useMemo, useState } from 'react';
+// import * as d3 from 'd3';
+
+// export default function InteractiveCrimeBarChart({ data, startDate, endDate }) {
+//   const svgRef     = useRef();
+//   const tooltipRef = useRef();
+
+//   // ── CHART DIMENSIONS ──
+//   const width   = 1000;
+//   const height  = 500;
+//   const margin  = { top: 40, right: 20, bottom: 150, left: 100 };
+
+//   // ── CATEGORY SELECTION ──
+//   const allCategories = useMemo(
+//     () => Array.from(new Set(data.map(d => d.category))).sort(),
+//     [data]
+//   );
+//   const [selectedCats, setSelectedCats] = useState(allCategories);
+//   useEffect(() => setSelectedCats(allCategories), [allCategories]);
+
+//   // ── FILTER & AGGREGATE ──
+//   const aggregated = useMemo(() => {
+//     const filtered = data.filter(d =>
+//       (!startDate || d.date >= startDate) &&
+//       (!endDate   || d.date <= endDate) &&
+//       selectedCats.includes(d.category)
+//     );
+//     const counts = d3.rollup(filtered, v => v.length, d => d.category);
+//     return Array.from(counts, ([category, count]) => ({ category, count }))
+//                 .sort((a, b) => b.count - a.count);
+//   }, [data, startDate, endDate, selectedCats]);
+
+//   // ── DRAW ──
+//   useEffect(() => {
+//     const svg     = d3.select(svgRef.current);
+//     const tooltip = d3.select(tooltipRef.current);
+//     svg.selectAll('*').remove();
+
+//     // scales
+//     const x = d3.scaleBand()
+//       .domain(aggregated.map(d => d.category))
+//       .range([margin.left, width - margin.right])
+//       .padding(0.2);
+
+//     const y = d3.scaleLinear()
+//       .domain([0, d3.max(aggregated, d => d.count) || 0])
+//       .nice()
+//       .range([height - margin.bottom, margin.top]);
+
+//     // axes
+//     svg.append('g')
+//       .attr('transform', `translate(0,${height - margin.bottom})`)
+//       .call(d3.axisBottom(x))
+//       .selectAll('text')
+//         .attr('transform', 'rotate(-45)')
+//         .style('text-anchor', 'end');
+
+//     svg.append('g')
+//       .attr('transform', `translate(${margin.left},0)`)
+//       .call(d3.axisLeft(y));
+
+//     // bars + tooltip
+//     svg.selectAll('.bar')
+//       .data(aggregated)
+//       .join('rect')
+//         .attr('class', 'bar')
+//         .attr('x',      d => x(d.category))
+//         .attr('y',      d => y(d.count))
+//         .attr('width',  x.bandwidth())
+//         .attr('height', d => height - margin.bottom - y(d.count))
+//         .on('mouseover', (event, d) => {
+//           const rect = svgRef.current.getBoundingClientRect();
+//           tooltip
+//             .style('opacity', 1)
+//             .html(`<strong>${d.category}</strong><br/>Count: ${d.count}`)
+//             .style('left',  (event.clientX - rect.left + 10) + 'px')
+//             .style('top',   (event.clientY - rect.top + 10) + 'px');
+//         })
+//         .on('mousemove', event => {
+//           const rect = svgRef.current.getBoundingClientRect();
+//           tooltip
+//             .style('left', (event.clientX - rect.left + 10) + 'px')
+//             .style('top',  (event.clientY - rect.top + 10) + 'px');
+//         })
+//         .on('mouseout', () => {
+//           tooltip.style('opacity', 0);
+//         });
+//   }, [aggregated]);
+
+//   // ── CATEGORY TOGGLE ──
+//   const toggleCategory = (cat) =>
+//     setSelectedCats(prev =>
+//       prev.includes(cat)
+//         ? prev.filter(c => c !== cat)
+//         : [...prev, cat]
+//     );
+
+//   // ── TITLE FORMATTING ──
+//   const fmt = d3.timeFormat('%Y-%m-%d');
+//   const titleText = startDate && endDate
+//     ? `Crime Counts from ${fmt(startDate)} to ${fmt(endDate)}`
+//     : 'Crime Counts';
+
+//   // ── RENDER ──
+//   return (
+//     <div>
+//       {/* Title */}
+//       <h3 className="text-xl font-semibold mb-4">{titleText}</h3>
+
+//       <div className="flex">
+//         {/* Checkbox List */}
+//         <div
+//           className="w-48 overflow-auto pr-4"
+//           style={{ maxHeight: height }}
+//         >
+//           {allCategories.map(cat => (
+//             <label key={cat} className="block text-sm mb-1">
+//               <input
+//                 type="checkbox"
+//                 className="mr-2"
+//                 checked={selectedCats.includes(cat)}
+//                 onChange={() => toggleCategory(cat)}
+//               />
+//               {cat}
+//             </label>
+//           ))}
+//         </div>
+
+//         {/* SVG + Tooltip */}
+//         <div className="flex-1 relative">
+//           <svg
+//             ref={svgRef}
+//             viewBox={`0 0 ${width} ${height}`}
+//             preserveAspectRatio="xMinYMin meet"
+//             style={{ width: '100%', height: '100%' }}
+//           />
+//           <div
+//             ref={tooltipRef}
+//             style={{
+//               position:      'absolute',
+//               opacity:       0,
+//               pointerEvents: 'none',
+//               backgroundColor: '#fff',
+//               border:        '1px solid #ccc',
+//               padding:       '6px',
+//               borderRadius:  '4px',
+//               fontSize:      '12px',
+//               boxShadow:     '0px 0px 6px rgba(0,0,0,0.1)'
+//             }}
+//           />
+//         </div>
+//       </div>
+//     </div>
+//   );
+// }

@@ -4,10 +4,18 @@ import './App.css';
 import * as d3 from 'd3';
 import InteractiveCrimeBarChart from './component/CrimeBar';
 import ExtractHeatMap from './component/ExtractFromPolice';
+import 'antd/dist/reset.css';
+import NewsList from './component/news_list';
+import AdvicePanel from './component/advice_panel';
+
+// Configure API base URL
+const API_BASE_URL = 'http://localhost:8001';
+
 
 export default function App() {
   // Date‐picker state (strings in "YYYY-MM-DD")
   const [startDate, setStartDate] = useState('');
+
   const [endDate, setEndDate]   = useState('');
   // Loaded and parsed CSV rows
   const [data, setData] = useState([]);
@@ -27,6 +35,7 @@ export default function App() {
     })
     .catch(err => console.error('CSV load error:', err));
   }, []);
+
 
   return (
     /* ── OUTERMOST WRAPPER ──
@@ -103,11 +112,11 @@ export default function App() {
       <aside className="flex-1 flex flex-col p-4 bg-white">
         <section className="mb-6 border rounded-lg p-4 bg-white">
           <h2 className="text-xl font-semibold mb-3">Related News</h2>
-          {/* Related News Content Here */}
+          <NewsList endDate={endDate}/>
         </section>
         <section className="border rounded-lg p-4 bg-white">
           <h2 className="text-xl font-semibold mb-3">LLM Advice</h2>
-          {/* LLM Advice Content Here */}
+          <AdvicePanel endDate={endDate} />
         </section>
       </aside>
     </div>

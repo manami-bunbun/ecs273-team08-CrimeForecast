@@ -1,11 +1,18 @@
 // src/App.jsx
 import React, { useState } from 'react';
 import './App.css';
+import 'antd/dist/reset.css';
+import NewsList from './component/news_list';
+import AdvicePanel from './component/advice_panel';
+
+// Configure API base URL
+const API_BASE_URL = 'http://localhost:8001';
 
 export default function App() {
   // pull the selected date‐range into state
   const [startDate, setStartDate] = useState('');
   const [endDate, setEndDate] = useState('');
+  const [selectedArea, setSelectedArea] = useState('San Francisco'); // Default area
 
   return (
     <div className="flex h-screen w-screen">
@@ -63,13 +70,13 @@ export default function App() {
         {/* Related News */}
         <section className="mb-6 border rounded-lg p-4 bg-white">
           <h2 className="text-xl font-semibold mb-3">Related News</h2>
-          {/* <NewsList /> */}
+          <NewsList endDate={endDate}/>
         </section>
 
         {/* LLM Advice */}
         <section className="border rounded-lg p-4 bg-white">
           <h2 className="text-xl font-semibold mb-3">LLM Advice</h2>
-          {/* <AdvicePanel /> */}
+          <AdvicePanel endDate={endDate} />
         </section>
       </aside>
     </div>

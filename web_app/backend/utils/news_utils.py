@@ -173,41 +173,41 @@ async def fetch_sf_news(end_date: str) -> List[Dict]:
         return []
 
 
-# async def analyze_news_relevance(news_items: List[Dict], trends: dict) -> List[Dict]:
-#     analyzed_news = []
-#     for item in news_items:
-#         # Calculate relevance score based on trend keywords in title and summary
-#         score = 0.0
-#         text = (item.get('title', '') + " " + item.get('summary', '')).lower()
+async def analyze_news_relevance(news_items: List[Dict], trends: dict) -> List[Dict]:
+    analyzed_news = []
+    for item in news_items:
+        # Calculate relevance score based on trend keywords in title and summary
+        score = 0.0
+        text = (item.get('title', '') + " " + item.get('summary', '')).lower()
         
-#         # Check for crime types from trends
-#         if 'crime_trends' in trends:
-#             for crime_type, trend in trends['crime_trends'].items():
-#                 if crime_type.lower() in text:
-#                     score += 0.5
+        # Check for crime types from trends
+        if 'crime_trends' in trends:
+            for crime_type, trend in trends['crime_trends'].items():
+                if crime_type.lower() in text:
+                    score += 0.5
         
-#         # Check for trend-related keywords
-#         trend_keywords = ["crime", "incident", "arrest", "police", "safety", "victim", 
-#                          "violence", "theft", "robbery", "assault", "burglary"]
+        # Check for trend-related keywords
+        trend_keywords = ["crime", "incident", "arrest", "police", "safety", "victim", 
+                         "violence", "theft", "robbery", "assault", "burglary"]
         
-#         for keyword in trend_keywords:
-#             if keyword in text:
-#                 score += 0.2
+        for keyword in trend_keywords:
+            if keyword in text:
+                score += 0.2
                 
-#         # Add location relevance
-#         location_keywords = ["san francisco", "sf", "bay area", "mission", "tenderloin", 
-#                            "soma", "downtown", "civic center"]
-#         for keyword in location_keywords:
-#             if keyword in text:
-#                 score += 0.3
+        # Add location relevance
+        location_keywords = ["san francisco", "sf", "bay area", "mission", "tenderloin", 
+                           "soma", "downtown", "civic center"]
+        for keyword in location_keywords:
+            if keyword in text:
+                score += 0.3
                 
      
-#         item['relevance_score'] = min(score, 1.0)
-#         analyzed_news.append(item)
+        item['relevance_score'] = min(score, 1.0)
+        analyzed_news.append(item)
         
-#     # Sort by relevance score
-#     analyzed_news.sort(key=lambda x: x['relevance_score'], reverse=True)
-#     return analyzed_news
+    # Sort by relevance score
+    analyzed_news.sort(key=lambda x: x['relevance_score'], reverse=True)
+    return analyzed_news
 
 
 async def analyze_news_relevance_gpt(news_items: List[Dict]) -> List[Dict]:

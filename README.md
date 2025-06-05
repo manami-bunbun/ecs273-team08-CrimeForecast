@@ -1,4 +1,4 @@
-# ecs273-team08-CrimeForecast
+# ecs273-team08-CrimeAnalysis
 
 ##  Project Structure & Task Overview
 See [`Implementation_Plan.md` ](https://github.com/manami-bunbun/ecs273-team08-CrimeForecast/blob/main/Implementation_Plan.md)
@@ -46,14 +46,6 @@ You need open ai api key to run this system. [Detail](https://platform.openai.co
 ## Execution
 
 ### Data setup
-**Data Pipeline Execution**
-```zsh
-# Run the main data pipeline
-python3 data_preprocessing/crime_data_pipeline.py
-
-# View processed data
-python3 data_preprocessing/view_crime_data.py
-```
 
 ### 1. MongoDB Setup
 
@@ -74,18 +66,16 @@ python3 data_preprocessing/view_crime_data.py
 
 3. Import crime data to MongoDB:
    ```zsh
+
+   # Run the main data pipeline
+   python data_preprocessing/crime_data_pipeline.py
+
    # Navigate to the import script directory
    cd web_app/backend/utils
    
-   # Run the import script
+   # Run the import script from the csv file
    python import_data.py
    ```
-
-   This script will:
-   - Create necessary indexes
-   - Import crime data from the CSV file
-   - Process and clean the data
-   - Insert records into MongoDB
 
 4. Verify data import:
    ```zsh
@@ -136,11 +126,15 @@ The frontend will be available at `http://localhost:5173`
 ### 4. Accessing the Application
 
 1. Open your browser and visit `http://localhost:5173`
+   
+2. Select the date
 
-2. The application should now show:
-   - Crime heatmap visualization
-   - Crime category statistics
+3. The application should now show the following items for previous 30days:
+   - Heatmap visualization by Crime categotry
+   - Bar Chart by Crime category
    - Related news selected by LLM and LLM advice
+![image](https://github.com/user-attachments/assets/cbdea3d9-bc62-448c-8b86-a25afc2f98cc)
+![image](https://github.com/user-attachments/assets/c24f8328-2b8b-49aa-bd59-e53b94a51d0f)
 
 
 

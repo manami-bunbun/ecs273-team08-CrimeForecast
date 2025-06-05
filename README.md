@@ -11,6 +11,7 @@ See [`Implementation_Plan.md` ](https://github.com/manami-bunbun/ecs273-team08-C
 ## Installation
 
 - **Python version**: 3.11.x
+- MongoDB@7.0
 
 ### Setup (with pyenv + venv / conda)
 
@@ -54,9 +55,6 @@ You need open ai api key to run this system. [Detail](https://platform.openai.co
    ```zsh
    # For macOS
    brew services start mongodb-community
-
-   # For Ubuntu
-   sudo systemctl start mongodb
    ```
 
 2. Verify MongoDB is running:

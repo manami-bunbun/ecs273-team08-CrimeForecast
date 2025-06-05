@@ -219,4 +219,5 @@ cython_debug/
 .pypirc
 
 
-.backend/data/mongodb
+
+web_app/backend/data/mongodb/

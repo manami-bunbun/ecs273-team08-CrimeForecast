@@ -134,3 +134,4 @@ if __name__ == "__main__":
         viewer.view_all_stats()
     except Exception as e:
         logger.error(f"Error in main: {e}") 
+ 

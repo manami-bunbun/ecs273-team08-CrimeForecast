@@ -1,0 +1,45 @@
+accuracy,f1_score,precision,feature_importance,best_params,label
+0.41312632321806636,0.4049346162404599,0.40448799645774103,"                     feature  importance
+18                  latitude    0.107711
+19                 longitude    0.105088
+1                      month    0.096708
+2                  dayofweek    0.082289
+0                       hour    0.072867
+6            time_risk_score    0.061088
+12       combined_risk_score    0.053164
+9            grid_risk_score    0.052560
+17     recurrence_risk_score    0.049695
+16  prevention_effectiveness    0.048869
+20                  geo_grid    0.047381
+15  resource_intensity_score    0.043750
+13    time_adjusted_severity    0.031479
+14  location_adjusted_impact    0.031341
+8    neighborhood_risk_score    0.029728
+5                 is_weekend    0.028374
+7                  neigh_enc    0.024173
+4               is_rush_hour    0.023092
+3                   is_night    0.010641
+11           category_impact    0.000000
+10         category_severity    0.000000","{'bootstrap': True, 'class_weight': 'balanced_subsample', 'max_depth': 18, 'max_features': 'sqrt', 'min_samples_leaf': 2, 'min_samples_split': 4, 'n_estimators': 157}",crime_type_super
+0.8755586920724535,0.8585330401951174,0.8446654525876809,"                     feature  importance
+2                  dayofweek    0.154791
+6            time_risk_score    0.091066
+0                       hour    0.073715
+1                      month    0.064102
+19                 longitude    0.063442
+18                  latitude    0.060390
+13    time_adjusted_severity    0.056730
+9            grid_risk_score    0.051546
+4               is_rush_hour    0.050804
+5                 is_weekend    0.046048
+20                  geo_grid    0.041217
+16  prevention_effectiveness    0.037378
+17     recurrence_risk_score    0.036829
+12       combined_risk_score    0.036491
+15  resource_intensity_score    0.035614
+14  location_adjusted_impact    0.033091
+8    neighborhood_risk_score    0.031396
+7                  neigh_enc    0.022834
+3                   is_night    0.012519
+11           category_impact    0.000000
+10         category_severity    0.000000","{'bootstrap': True, 'class_weight': 'balanced_subsample', 'max_depth': 18, 'max_features': 'sqrt', 'min_samples_leaf': 2, 'min_samples_split': 4, 'n_estimators': 157}",crime_type_violent

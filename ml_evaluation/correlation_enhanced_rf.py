@@ -21,11 +21,10 @@ logger = logging.getLogger(__name__)
 
 class CorrelationEnhancedRandomForest:
     def __init__(self):
-        # Load environment variables
+  
         load_dotenv()
         self.client = OpenAI(api_key=os.getenv("OPENAI_API_KEY"))
         
-        # Load data
         csv_dir = os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__))), "data", "csv")
         csv_files = glob.glob(os.path.join(csv_dir, "sf_crime_*.csv.gz"))
         
@@ -39,18 +38,12 @@ class CorrelationEnhancedRandomForest:
         logger.info(f"CSV file loaded successfully. Columns: {self.df.columns.tolist()}")
         logger.info(f"Dataset shape: {self.df.shape}")
         
-        # Create derived target columns
         self.create_derived_targets()
-        
-        # Handle missing values
         self.handle_missing_values()
         
-        # Cache for LLM generated category scores
         self.category_scores = {}
         
     def create_derived_targets(self):
-        """Create derived target columns for different crime classifications"""
-        # Map violent crimes
         violent_crimes = [
             'Homicide', 'Rape', 'Assault', 'Robbery', 
             'Human Trafficking (A), Commercial Sex Acts',
@@ -58,7 +51,7 @@ class CorrelationEnhancedRandomForest:
         ]
         self.df['crime_type_violent'] = self.df['incident_category'].isin(violent_crimes).astype(str)
         
-        # Map super categories
+
         super_categories = {
             'VIOLENT': violent_crimes,
             'PROPERTY': ['Burglary', 'Larceny Theft', 'Motor Vehicle Theft', 'Arson', 'Vandalism'],
@@ -86,13 +79,10 @@ class CorrelationEnhancedRandomForest:
         logger.info(f"Occupation crimes distribution: \n{self.df['crime_type_occupation'].value_counts()}")
     
     def handle_missing_values(self):
-        """Handle missing values in the dataset"""
-        # Fill missing categorical values
         categorical_columns = ['incident_category', 'analysis_neighborhood']
         for col in categorical_columns:
             self.df[col] = self.df[col].fillna('Unknown')
         
-        # Fill missing numerical values with median
         numerical_columns = ['latitude', 'longitude']
         for col in numerical_columns:
             if col in self.df.columns:
@@ -101,12 +91,10 @@ class CorrelationEnhancedRandomForest:
         logger.info("Missing values handled")
     
     def generate_category_scores(self):
-        """Generate base scores for each unique incident category using minimal LLM calls"""
-        # Filter out non-string categories and convert to string
         unique_categories = [str(cat) for cat in self.df['incident_category'].unique() if pd.notna(cat)]
         logger.info(f"Found {len(unique_categories)} unique categories")
         
-        # Create a single prompt for all categories
+
         categories_list = "\n".join(unique_categories)
         prompt = f"""Analyze each crime incident category below and provide the following scores (1-10):
 1. Severity: How serious is the crime
@@ -162,39 +150,35 @@ Categories:
         self.df['month'] = self.df['incident_datetime'].dt.month
         self.df['dayofweek'] = self.df['incident_datetime'].dt.weekday
         
-        # Time period features
+     
         self.df['is_night'] = (self.df['hour'] >= 22) | (self.df['hour'] <= 5)
         self.df['is_rush_hour'] = self.df['hour'].isin([7, 8, 9, 16, 17, 18])
         self.df['is_weekend'] = self.df['dayofweek'].isin([5, 6])
-        
-        # Create time-based risk scores
+
+
         hour_crime_counts = self.df.groupby('hour').size()
         total_crimes = len(self.df)
         self.df['time_risk_score'] = self.df['hour'].map(hour_crime_counts / total_crimes)
 
     def create_spatial_features(self):
-        """Create enhanced spatial features"""
-        # Encode neighborhoods
         le_neigh = LabelEncoder()
         self.df['neigh_enc'] = le_neigh.fit_transform(self.df['analysis_neighborhood'].fillna('Unknown'))
         
-        # Calculate neighborhood risk scores
+
         neigh_crime_counts = self.df.groupby('analysis_neighborhood').size()
         total_crimes = len(self.df)
         self.df['neighborhood_risk_score'] = self.df['analysis_neighborhood'].map(neigh_crime_counts / total_crimes)
         
-        # Create location grid
+
         if 'latitude' in self.df.columns and 'longitude' in self.df.columns:
             self.df['geo_grid'] = pd.cut(self.df['latitude'], bins=10, labels=False) * 10 + \
                                 pd.cut(self.df['longitude'], bins=10, labels=False)
             
-            # Calculate grid-based risk scores
+            
             grid_crime_counts = self.df.groupby('geo_grid').size()
             self.df['grid_risk_score'] = self.df['geo_grid'].map(grid_crime_counts / total_crimes)
 
     def create_correlation_features(self):
-        """Create new features based on correlations between existing features"""
-        # Add category scores
         for score_type in ['severity', 'impact', 'resources', 'prevention', 'recurrence']:
             self.df[f'category_{score_type}'] = self.df['incident_category'].astype(str).map(
                 lambda x: self.category_scores.get(x, {score_type: 5})[score_type] / 10.0

@@ -1,26 +1,28 @@
 from fastapi import FastAPI, Query, HTTPException
 from fastapi.middleware.cors import CORSMiddleware
 from typing import List, Optional
-from datetime import datetime
+from datetime import datetime, timedelta
 from motor.motor_asyncio import AsyncIOMotorClient
-from utils.news_utils import fetch_sf_news, analyze_news_relevance
-from utils.llm_advice import analyze_area_safety
-from utils.data_schema import NewsItem, HeatmapData, LLMAdvice, AreaAnalysis
+from utils.news_utils import fetch_sf_news, analyze_news_relevance, analyze_news_relevance_gpt
+from utils.data_schema import NewsItem, TrendAnalysis, LLMAnalysis, AnalysisResponse
 from dotenv import load_dotenv
 import os
-from utils.store_analysis import analysis_cache
+from utils.trend_analysis import analyze_crime_trends
+from utils.llm_analysis import analyze_trends_and_news
+import pandas as pd
+import logging
 
-# Load environment variables
+logging.basicConfig(level=logging.INFO)
+logger = logging.getLogger(__name__)
+
 load_dotenv()
 
-app = FastAPI()
+app = FastAPI(title="SF Crime Forecast API")
 
-# MongoDB connection
 MONGO_URL = "mongodb://localhost:27017"
 client = AsyncIOMotorClient(MONGO_URL)
 db = client.crime_forecast
 
-# CORS middleware
 app.add_middleware(
     CORSMiddleware,
     allow_origins=["*"],
@@ -34,101 +36,74 @@ async def root():
     return {"message": "Crime Forecast API"}
 
 
-# call this for frontend
-@app.post("/api/analysis/batch/{area_name}")
-async def create_area_analysis(
-    area_name: str,
-    latitude: float = Query(..., description="Area latitude"),
-    longitude: float = Query(..., description="Area longitude"),
-    start_date: str = Query(..., description="Start date in YYYY-MM-DD format"),
+# Get relevant news articles for the last month before the specified end date
+@app.get("/api/news", response_model=List[NewsItem])
+async def get_news(
     end_date: str = Query(..., description="End date in YYYY-MM-DD format")
 ):
- 
     try:
-        # Get news data
-        start_dt = datetime.strptime(start_date, "%Y-%m-%d")
-        end_dt = datetime.strptime(end_date, "%Y-%m-%d")
-        
-        if end_dt < start_dt:
+        news_items = await fetch_sf_news(end_date)
+        analyzed_news = await analyze_news_relevance_gpt(news_items)
+        return analyzed_news[:5]
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
+
+# Get comprehensive crime trend analysis with news integration and LLM insights
+@app.get("/api/analysis", response_model=AnalysisResponse)
+async def get_trend_analysis(
+    end_date: str = Query(..., description="End date for analysis (YYYY-MM-DD)")
+) -> AnalysisResponse:
+    try:
+        end_date_obj = datetime.strptime(end_date, "%Y-%m-%d")
+        start_date_obj = end_date_obj - timedelta(days=30)
+        start_date = start_date_obj.strftime("%Y-%m-%d")
+
+        logger.info(f"Fetching crime data from {start_date} to {end_date}")
+
+        crime_data = []
+        async for doc in db.incidents.find({
+            "incident_datetime": {
+                "$gte": start_date_obj,
+                "$lte": end_date_obj
+            }
+        }):
+            crime_data.append(doc)
+            
+        if not crime_data:
             raise HTTPException(
-                status_code=400,
-                detail="End date must be after start date"
+                status_code=404,
+                detail="No crime data found for the specified time range"
             )
             
-        news_items = await fetch_sf_news(start_dt, end_dt)
-        if news_items:
-            news_items = await analyze_news_relevance(news_items)
-
-        # Get heatmap data (mock for now)
-        heatmap_data = HeatmapData(
-            latitude=latitude,
-            longitude=longitude,
-            risk_score=0.7,  # TODO: Get actual risk score
-            district="San Fransisco"  # TODO: Get actual district
-        )
-
-        # Get LLM analysis
-        llm_advice = await analyze_area_safety(
-            area_name=area_name,
-            heatmap_data=heatmap_data,
-            news_items=news_items
-        )
-
-        # Store in cache
-        analysis_cache.store_analysis(
-            area_name=area_name,
-            start_date=start_date,
-            end_date=end_date,
-            news=news_items,
-            advice=llm_advice
-        )
-
-        return heatmap_data, news_items, llm_advice
-
-    except ValueError as e:
-        if "OPENAI_API_KEY" in str(e):
+        df = pd.DataFrame(crime_data)
+        
+        try:
+            # Get news data
+            news_items = await fetch_sf_news(end_date)
+            
+            # Get trend analysis
+            trend_data = await analyze_crime_trends(df, news_items=news_items)
+            
+            # Get LLM analysis
+            llm_analysis = await analyze_trends_and_news(trend_data)
+            
+            return AnalysisResponse(
+                trends=trend_data.model_dump(),
+                news=news_items[:5] if news_items else [],
+                llm_analysis=llm_analysis.model_dump()
+            )
+            
+        except Exception as e:
+            logger.error(f"Error in analysis pipeline: {str(e)}")
             raise HTTPException(
                 status_code=500,
-                detail="API key configuration error"
+                detail=f"Error in analysis pipeline: {str(e)}"
             )
-        raise HTTPException(
-            status_code=400,
-            detail=str(e)
-        )
+    except HTTPException as he:
+        raise he
     except Exception as e:
+        logger.error(f"Unexpected error: {str(e)}")
         raise HTTPException(
             status_code=500,
-            detail=f"An error occurred: {str(e)}"
+            detail=f"An unexpected error occurred: {str(e)}"
         )
-
-
-# for visualization: call this for frontend
-@app.get("/api/news", response_model=List[NewsItem])
-async def get_cached_news(
-    area_name: str = Query(..., description="Area name"),
-    start_date: str = Query(..., description="Start date in YYYY-MM-DD format"),
-    end_date: str = Query(..., description="End date in YYYY-MM-DD format")
-):
-    news = analysis_cache.get_news(area_name, start_date, end_date)
-    if news is None:
-        raise HTTPException(
-            status_code=404,
-            detail="No cached news found. Please run analysis first."
-        )
-    return news
-
-# for visualization: call this for frontend
-@app.get("/api/advice", response_model=LLMAdvice)
-async def get_cached_advice(
-    area_name: str = Query(..., description="Area name"),
-    start_date: str = Query(..., description="Start date in YYYY-MM-DD format"),
-    end_date: str = Query(..., description="End date in YYYY-MM-DD format")
-):
-
-    advice = analysis_cache.get_advice(area_name, start_date, end_date)
-    if advice is None:
-        raise HTTPException(
-            status_code=404,
-            detail="No cached advice found. Please run analysis first."
-        )
-    return advice

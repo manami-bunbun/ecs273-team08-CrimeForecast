@@ -2,7 +2,7 @@
 This file is the LLM analysis based on the trend analysis output and news.
 """
 from typing import List, Dict
-from openai import OpenAI
+import openai
 import os
 from dotenv import load_dotenv
 from .data_schema import LLMAnalysis
@@ -14,10 +14,8 @@ from .trend_analysis import TrendData
 logger = logging.getLogger(__name__)
 load_dotenv()
 
-client = OpenAI(
-    api_key=os.getenv("OPENAI_API_KEY"),
-    timeout=30.0
-)
+# Set OpenAI API key
+openai.api_key = os.getenv("OPENAI_API_KEY")
 
 def format_news_for_prompt(news_items: List[Dict]) -> str:
     if not news_items:
@@ -28,15 +26,12 @@ def format_news_for_prompt(news_items: List[Dict]) -> str:
         for item in news_items
     ])
 
-
-
 async def analyze_trends_and_news(trend_data: TrendData) -> LLMAnalysis:
     try:
         news_context = format_news_for_prompt(trend_data.relevant_news if trend_data.relevant_news else [])
         
-        response = client.chat.completions.create(
-            model="gpt-4o",
-            # we use LLM to generate the prompt here
+        response = openai.ChatCompletion.create(
+            model="gpt-4",
             messages=[ 
                 {"role": "system", "content": """You are a crime analysis expert. Your task is to:
                 1. Analyze crime trends and news
@@ -72,7 +67,7 @@ async def analyze_trends_and_news(trend_data: TrendData) -> LLMAnalysis:
         )
         
         try:
-            content = response.choices[0].message.content.strip()
+            content = response.choices[0].message['content'].strip()
 
             # Remove any potential markdown formatting
             if content.startswith("```json"):
@@ -120,3 +115,4 @@ def parse_llm_response(response_text: str) -> LLMAnalysis:
         relevant_news=[],  
         safety_recommendations=[line.strip("- ") for line in lines if line.startswith("- ")]
     ) 
+ 

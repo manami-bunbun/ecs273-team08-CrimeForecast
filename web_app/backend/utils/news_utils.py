@@ -4,7 +4,7 @@ This file collects news from Google News to feed the LLM.
 
 from typing import List, Dict, Optional
 from datetime import datetime, timedelta
-from openai import OpenAI
+import openai
 from dotenv import load_dotenv
 import os
 import aiohttp
@@ -16,6 +16,7 @@ import asyncio
 from urllib.parse import quote, urlencode
 import re
 import logging
+import glob
 
 
 
@@ -24,10 +25,8 @@ load_dotenv()
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
 
-client = OpenAI(
-    api_key=os.getenv("OPENAI_API_KEY"),
-    timeout=30.0
-)
+# Set OpenAI API key
+openai.api_key = os.getenv("OPENAI_API_KEY")
 
 
 class NewsItem(BaseModel):

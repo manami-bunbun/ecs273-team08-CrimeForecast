@@ -4,20 +4,21 @@ from datetime import datetime
 import logging
 from pymongo import MongoClient, GEOSPHERE
 import os
+import glob
 
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
 
+# Convert various datetime formats to pandas datetime
 def convert_datetime(dt):
-    """Convert various datetime formats to pandas datetime"""
     try:
         return pd.to_datetime(dt)
     except Exception as e:
         logger.error(f"Failed to parse datetime: {dt}, Error: {e}")
         return None
 
+# Process crime data before inserting into MongoDB
 def process_crime_data(df):
-    """Process crime data before inserting into MongoDB"""
     # Convert timestamps
     df['incident_datetime'] = pd.to_datetime(df['incident_datetime'])
     
@@ -49,8 +50,25 @@ def process_crime_data(df):
     
     return df
 
+# Find the most recent crime data CSV file
+def get_latest_csv():
+    # Get the absolute path to the project root directory
+    current_dir = os.path.dirname(os.path.abspath(__file__))  # utils directory
+    project_root = os.path.dirname(os.path.dirname(os.path.dirname(current_dir)))  # project root
+    csv_dir = os.path.join(project_root, "data", "csv")
+    
+    logger.info(f"Looking for CSV files in: {csv_dir}")
+    csv_files = glob.glob(os.path.join(csv_dir, "sf_crime_*.csv.gz"))
+    
+    if not csv_files:
+        raise FileNotFoundError(f"No crime data CSV files found in {csv_dir}")
+    
+    latest_csv = max(csv_files, key=os.path.getctime)
+    logger.info(f"Using latest CSV file: {latest_csv}")
+    return latest_csv
+
+# Import crime data into MongoDB
 async def import_crime_data():
-    """Import crime data into MongoDB"""
     try:
         # MongoDB connection
         client = MongoClient("mongodb://localhost:27017")
@@ -66,8 +84,8 @@ async def import_crime_data():
         db.incidents.create_index([("location", GEOSPHERE)])
         logger.info("Created indexes")
         
-        # Read CSV file
-        csv_path = "../../../data/csv/sf_crime_20240529_20250523.csv.gz"
+        # Read latest CSV file
+        csv_path = get_latest_csv()
         logger.info("Reading CSV file...")
         
         with gzip.open(csv_path, 'rt') as f:

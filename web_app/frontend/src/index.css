@@ -1,4 +1,7 @@
-@import "tailwindcss";
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
 :root {
   font-family: system-ui, Avenir, Helvetica, Arial, sans-serif;
   line-height: 1.5;
@@ -30,7 +33,6 @@ h1 {
   font-size: 3.2em;
   line-height: 1.1;
 }
-
 
 .view {
   background-color: #e2e8f0;

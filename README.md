@@ -47,7 +47,10 @@ brew install mongodb-community@7.0
 Copy the .env.example template and fill in required values 
 ```
 cp .env.example .env
+
 ```
+
+You need open ai api key to run this system. [Detail](https://platform.openai.com/api-keys)
 
 #### Virtual Envioroments
 ```zsh

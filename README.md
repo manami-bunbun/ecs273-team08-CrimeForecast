@@ -24,13 +24,12 @@ Key features include:
 .
 ├── data_preprocessing/     # Data processing scripts
 ├── web_app/
-│   ├── frontend/          # React frontend
+│   ├── frontend/          # D3 frontend
 │   └── backend/           # FastAPI backend
 ├── requirements.txt       # Python dependencies
+├── .env sample
 └── README.md
 ```
-
-
 
 ### 1. MongoDB Setup
 
@@ -39,26 +38,18 @@ For macOS users (using Homebrew):
 # Install MongoDB
 brew tap mongodb/brew
 brew install mongodb-community@7.0
-
-# create virtual environment
-python -m venv .venv
-source .venv/bin/activate
-
-# install dependencies
-pip install -r requirements.txt
 ```
 
-deactivate virtual environment
-```zsh
-deactivate
-```
 
-### 2. Environment Variables
+### 2.Backend Setup
+
+#### Environment Variables
 Copy the .env.example template and fill in required values 
 ```
 cp .env.example .env
 ```
 
+#### Virtual Envioroments
 ```zsh
 #if necessary
 # install correct Python version
@@ -68,26 +59,21 @@ pyenv local 3.11.8
 # Create and activate virtual environment
 python -m venv .venv
 source .venv/bin/activate  # For Unix/macOS
-# .venv\Scripts\activate  # For Windows
+
 
 # Install Python dependencies
 pip install -r requirements.txt
 ```
 
-### 3. Frontend Setup
 
+
+deactivate virtual environment
 ```zsh
-# Navigate to frontend directory
-cd web_app/frontend
-
-# Install dependencies
-npm install
-
-# Start development server
-npm run dev
+deactivate
 ```
 
 
+### 3. Set Data
 1. Start MongoDB service:
    ```zsh
    # For macOS
@@ -124,7 +110,8 @@ npm run dev
    db.incidents.count()
    ```
 
-### 2. Backend Setup & Run
+## Excution 
+### 1. Backend Setup & Run
 
 1. Navigate to backend directory:
    ```zsh
@@ -139,7 +126,7 @@ npm run dev
 
 The backend will be available at `http://localhost:8001`
 
-### 3. Frontend Setup & Run
+### 2. Frontend Setup & Run
 
 1. Navigate to frontend directory:
    ```zsh
@@ -158,7 +145,7 @@ The backend will be available at `http://localhost:8001`
 
 The frontend will be available at `http://localhost:5173`
 
-### 4. Accessing the Application
+### 3. Accessing the Application
 
 1. Open your browser and visit `http://localhost:5173`
    

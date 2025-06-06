@@ -42,7 +42,12 @@ async def analyze_trends_and_news(trend_data: TrendData) -> LLMAnalysis:
                 1. Analyze crime trends and news
                 2. Select the top 5 most relevant news items that are most important for public safety
                 3. Provide practical safety advice
-                You must respond with valid JSON only, without any additional text or formatting."""},
+                
+                Important constraints:
+                    - You must only refer to crime types or patterns that are explicitly mentioned in the provided trend summary.
+                    - Do not invent or speculate about additional categories, explanations, or causes.
+                    - If no relevant news article can be identified, include 'no match' as a placeholder.
+                    - You must respond with valid JSON only, without any additional text or formatting."""},
                 {"role": "user", "content": """Please analyze the following data and respond with a JSON object in this exact format:
                         {
                             "trend_summary": "A clear and concise 2-3 sentence summary of the main crime trends",
@@ -68,7 +73,7 @@ async def analyze_trends_and_news(trend_data: TrendData) -> LLMAnalysis:
         
         try:
             content = response.choices[0].message.content.strip()
-            
+
             # Remove any potential markdown formatting
             if content.startswith("```json"):
                 content = content[7:]

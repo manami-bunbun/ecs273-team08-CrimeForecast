@@ -1,29 +1,36 @@
 from pydantic import BaseModel
+from typing import List, Dict, Optional
 from datetime import datetime
-from typing import List, Optional, Dict
 
 class NewsItem(BaseModel):
     title: str
-    link: str
-    published_date: datetime
     summary: str
-    relevance_score: float
+    link: Optional[str] = None
+    published_date: Optional[str] = None
+    relevance_score: float = 0.0
 
-class HeatmapData(BaseModel):
-    latitude: float
-    longitude: float
-    risk_score: float
-    district: str
+class CrimeTrend(BaseModel):
+    category: str
+    count: int
+    change_percentage: float
+    trend_direction: str
 
-class LLMAdvice(BaseModel):
-    area_name: str
-    risk_level: str
-    summary: str
-    recommendations: List[str]
-    relevant_factors: List[str]
+class TrendAnalysis(BaseModel):
+    time_period: str
+    crime_trends: Dict[str, float]
+    temporal_patterns: Dict[str, Dict[str, int]]
+    location_patterns: Dict[str, int]
+    pattern_description: Optional[str] = None
+    contributing_factors: Optional[List[str]] = None
+    news_context: Optional[str] = None
+    recommendations: Optional[List[str]] = None
 
-class AreaAnalysis(BaseModel):
-    area_name: str
-    heatmap_data: HeatmapData
-    news_items: List[NewsItem]
-    llm_advice: LLMAdvice 
+class LLMAnalysis(BaseModel):
+    trend_summary: str
+    relevant_news: List[Dict]
+    safety_recommendations: List[str]
+
+class AnalysisResponse(BaseModel):
+    trends: Dict
+    news: List[Dict]
+    llm_analysis: Dict 

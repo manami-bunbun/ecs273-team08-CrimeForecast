@@ -1,0 +1,194 @@
+/* src/App.css */
+
+/* ── FLEX LAYOUT ── */
+.flex {
+  display: flex;
+}
+.flex-col {
+  flex-direction: column;
+}
+.items-center {
+  align-items: center;
+}
+
+/* ── SIZING ── */
+.h-screen {
+  height: 100vh;
+}
+.w-screen {
+  width: 100vw;
+}
+.w-10 {
+  width: 2.5rem;
+}
+.h-10 {
+  height: 2.5rem;
+}
+
+/* ── FLEX GROW ── */
+.flex-1 {
+  flex: 1;
+}
+.flex-3 {
+  flex: 3;
+}
+
+/* ── PADDING & MARGIN ── */
+.p-4 {
+  padding: 1rem;
+}
+.mb-6 {
+  margin-bottom: 1.5rem;
+}
+.mb-3 {
+  margin-bottom: 0.75rem;
+}
+.mb-2 {
+  margin-bottom: 0.5rem;
+}
+.mr-3 {
+  margin-right: 0.75rem;
+}
+
+/* ── HORIZONTAL SPACING UTIL ── */
+.space-x-4 > * + * {
+  margin-left: 1rem;
+}
+
+/* ── BORDERS & ROUNDED CORNERS ── */
+.border {
+  border: 1px solid #d1d5db;
+}
+.rounded {
+  border-radius: 0.25rem;
+}
+.rounded-lg {
+  border-radius: 0.5rem;
+}
+
+/* ── OVERFLOW ── */
+.overflow-auto {
+  overflow: auto;
+}
+
+/* ── BACKGROUNDS ── */
+.bg-white {
+  background-color: #ffffff;
+}
+.bg-gray-50 {
+  background-color: #f9fafb;
+}
+
+/* ── TEXT STYLES ── */
+.text-2xl {
+  font-size: 1.5rem;
+}
+.text-xl {
+  font-size: 1.25rem;
+}
+.text-lg {
+  font-size: 1.125rem;
+}
+.text-sm {
+  font-size: 0.875rem;
+}
+.font-semibold {
+  font-weight: 600;
+}
+.font-medium {
+  font-weight: 500;
+}
+.text-gray-600 {
+  color: #4b5563;
+}
+
+/* ── FORM ELEMENT DEFAULTS ── */
+input[type="date"] {
+  font-family: inherit;
+  font-size: inherit;
+  border: none;
+  outline: none;
+}
+input[type="date"].border {
+  border: 1px solid #d1d5db;
+  border-radius: 0.25rem;
+  padding: 0.5rem;
+}
+
+.app-container {
+  display: flex;
+  flex-direction: column;
+  min-height: 100vh;
+  background-color: #f5f5f5;
+}
+
+.app-header {
+  background-color: #fff;
+  padding: 1rem;
+  box-shadow: 0 2px 4px rgba(0, 0, 0, 0.1);
+}
+
+.app-header h1 {
+  font-size: 1.5rem;
+  font-weight: 600;
+  color: #333;
+}
+
+.main-content {
+  display: flex;
+  flex: 1;
+  padding: 1rem;
+  gap: 1rem;
+}
+
+.left-column {
+  flex: 3;
+  display: flex;
+  flex-direction: column;
+}
+
+.right-column {
+  flex: 1;
+  background: white;
+  border-radius: 8px;
+  box-shadow: 0 2px 4px rgba(0, 0, 0, 0.1);
+  padding: 1rem;
+}
+
+.chart-map-container {
+  flex: 1;
+  background: white;
+  border-radius: 8px;
+  box-shadow: 0 2px 4px rgba(0, 0, 0, 0.1);
+  overflow: hidden;
+}
+
+/* アニメーション効果 */
+.chart-map-container > div {
+  transition: opacity 0.3s ease-in-out;
+}
+
+/* ボタンホバー効果 */
+button:hover {
+  transform: translateY(-1px);
+  box-shadow: 0 2px 4px rgba(0, 0, 0, 0.1);
+}
+
+/* カスタムスクロールバースタイル */
+aside::-webkit-scrollbar {
+  width: 8px;
+}
+
+aside::-webkit-scrollbar-track {
+  background: #f1f1f1;
+  border-radius: 4px;
+}
+
+aside::-webkit-scrollbar-thumb {
+  background: #ccc;
+  border-radius: 4px;
+}
+
+aside::-webkit-scrollbar-thumb:hover {
+  background: #999;
+}

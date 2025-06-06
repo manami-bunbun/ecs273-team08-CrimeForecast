@@ -1,130 +1,178 @@
-from typing import List, Dict
+"""
+This file collects news from Google News to feed the LLM.
+"""
+
+from typing import List, Dict, Optional
 from datetime import datetime, timedelta
-from openai import OpenAI
+import openai
 from dotenv import load_dotenv
 import os
 import aiohttp
 from pydantic import BaseModel
 import json
 from .data_schema import NewsItem
+from bs4 import BeautifulSoup
+import asyncio
+from urllib.parse import quote, urlencode
+import re
+import logging
+import glob
+
+
 
 load_dotenv()
 
+logging.basicConfig(level=logging.INFO)
+logger = logging.getLogger(__name__)
 
-# fetch San Francisco news from NewsAPI
-async def fetch_sf_news(start_date: datetime, end_date: datetime) -> List[Dict]:
-    api_key = os.getenv('NEWS_API_KEY')
-    if not api_key:
-        raise ValueError("NEWS_API_KEY not found in environment variables")
+# Set OpenAI API key
+openai.api_key = os.getenv("OPENAI_API_KEY")
+
+
+class NewsItem(BaseModel):
+    title: str
+    link: str
+    published_date: str
+    summary: str
+
+
+    def to_dict(self) -> Dict:
+        return {
+            "title": self.title,
+            "link": self.link,
+            "published_date": self.published_date
+        }
+
+
+# Convert relative date strings to ISO format dates
+def parse_relative_date(date_str: str) -> str:
+
+    now = datetime.now()
     
-    from_date = start_date.strftime('%Y-%m-%d') #TODO: check
-    to_date = end_date.strftime('%Y-%m-%d')
+    if 'hour' in date_str or 'min' in date_str:
+        return now.isoformat()
     
-    # Keywords for San Francisco news
-    keywords = '("San Francisco" OR "SF" OR "Bay Area")'
+    match = re.search(r'(\d+)\s*(day|week|month|year)', date_str)
+    if not match:
+        return now.isoformat()
+        
+    num = int(match.group(1))
+    unit = match.group(2)
     
-    # NewsAPI endpoint
-    url = f'https://newsapi.org/v2/everything'
-    params = {
-        'q': keywords,
-        'from': from_date,
-        'to': to_date,
-        'sortBy': 'publishedAt',
-        'language': 'en',
-        'apiKey': api_key,
-        'pageSize': 20  # Get only 20 most recent articles
-    }
+    if unit == 'day':
+        delta = timedelta(days=num)
+    elif unit == 'week':
+        delta = timedelta(weeks=num)
+    elif unit == 'month':
+        delta = timedelta(days=num*30)
+    else:  # year
+        delta = timedelta(days=num*365)
     
+    date = now - delta
+    return date.isoformat()
+
+
+# fetch San Francisco news from Google News
+async def fetch_sf_news(end_date: str) -> List[Dict]:
     try:
+        # Convert end_date string to datetime (timezone naive)
+        end_date_dt = datetime.strptime(end_date, "%Y-%m-%d")
+        # Calculate start date (1 month before end_date)
+        start_date_dt = end_date_dt - timedelta(days=30)
+        
+        # Format dates for Google News query
+        after = start_date_dt.strftime("%Y-%m-%d")
+        before = end_date_dt.strftime("%Y-%m-%d")
+        
+        # Google News search URL construction with date range
+        search_query = "San Francisco crime"
+        base_url = "https://news.google.com/search"
+        params = {
+            "q": search_query,
+            "hl": "en-US",
+            "gl": "US",
+            "ceid": "US:en"
+        }
+        url = f"{base_url}?{urlencode(params)}"
+        
+        logger.info(f"Fetching news from URL: {url}")
+        logger.info(f"Date range: {after} to {before}")
+        
         async with aiohttp.ClientSession() as session:
-            async with session.get(url, params=params) as response:
-                if response.status == 200:
-                    data = await response.json()
-                    articles = data.get('articles', [])
-                    
-                    # Format articles
-                    sf_news = []
-                    for article in articles:
-                        sf_news.append({
-                            'title': article.get('title', ''),
-                            'link': article.get('url', ''),
-                            'published_date': datetime.strptime(article.get('publishedAt', ''), '%Y-%m-%dT%H:%M:%SZ'),
-                            'summary': article.get('description', '')
-                        })
-                    
-                    return sf_news
-                else:
-                    print(f"Error fetching news: {response.status}")
-                    return []
+            async with session.get(url) as response:
+                html = await response.text()
+                
+                soup = BeautifulSoup(html, 'html.parser')
+                articles = soup.find_all('article')
+                
+                results = []
+                for article in articles:
+                    try:
+                        # Find title and link
+                        title_element = None
+                        for selector in ['a.JtKRv', 'h3 a', 'h4 a']:
+                            title_element = article.select_one(selector)
+                            if title_element:
+                                break
+                                
+                        if not title_element:
+                            continue
+                            
+                        title = title_element.get_text(strip=True)
+                        if not title:
+                            continue
+                            
+                        logger.info(f"Found article: {title}")
+                        
+                        #date
+                        time_element = article.find('time', class_='hvbAAd')
+                        relative_date = time_element.get_text(strip=True) if time_element else None
+                        datetime_attr = time_element.get('datetime') if time_element else None
+                        
+                        if datetime_attr:
+                            published_date = datetime_attr.replace('Z', '')
+                            article_date = datetime.fromisoformat(published_date)
+                            
+         
+                            if article_date.date() < start_date_dt.date() or article_date.date() > end_date_dt.date():
+                                logger.info(f"Article date {article_date.date()} outside range {start_date_dt.date()} to {end_date_dt.date()}, skipping")
+                                continue
+                                
+                            logger.info(f"Article date: {published_date}")
+                        else:
+                            continue
+                        
+              
+                        if not any(keyword.lower() in title.lower() for keyword in ["SF", "San Francisco", "Bay Area"]):
+                            # logger.info("Article not relevant to SF, skipping")
+                            continue
+                            
+                
+                        link = title_element.get('href', '')
+                        if link.startswith('./'):
+                            link = 'https://news.google.com' + link[1:]
+                        elif not link.startswith('http'):
+                            link = 'https://news.google.com' + link
+                            
+        
+                        news_item = {
+                            "title": title,
+                            "link": link,
+                            "published_date": published_date,
+                            "summary": title, 
+                            "relevance_score": 0.0
+                        }
+                        
+                        results.append(news_item)
+                        # logger.info("Article added to results")
+                        
+                    except Exception as e:
+                        logger.error(f"Error processing article: {str(e)}")
+                        continue
+                
+                logger.info(f"Returning {len(results)} articles")
+                return results
+                
     except Exception as e:
-        print(f"Error fetching news: {e}")
+        logger.error(f"Error fetching news: {str(e)}")
         return []
-
-
-async def analyze_news_relevance(news_items: List[Dict]) -> List[NewsItem]:
-    """Analyze news relevance using GPT API in a single batch"""
-    api_key = os.getenv('OPENAI_API_KEY')
-    if not api_key:
-        raise ValueError("OPENAI_API_KEY not found in environment variables")
-        
-    client = OpenAI(api_key=api_key)
-    
-
-    news_texts = []
-    for i, news in enumerate(news_items, 1):
-        news_texts.append(
-            "Article {}:\nTitle: {}\nSummary: {}".format(
-                i,
-                news['title'],
-                news['summary']
-            )
-        )
-    
-    prompt = """
-            Analyze the following news articles for their relevance to crime prediction in San Francisco.
-            Rate each article's relevance on a scale of 0.0 to 1.0, where:
-            0.0 = Not relevant to crime/safety
-            1.0 = Highly relevant to crime/safety
-
-            {}
-
-            Return a JSON array of objects with article numbers and scores, sorted by relevance (highest first), including only the top 5 most relevant articles.
-            Example format:
-            [
-                {"article": 1, "score": 0.9},
-                {"article": 4, "score": 0.8},
-                ...
-            ]
-            """.format('\n'.join(news_texts))
-    
-    try:
-        response = client.chat.completions.create(
-            model="gpt-4",
-            messages=[
-                {"role": "system", "content": "You are a crime news analyst. Analyze multiple news articles and return a JSON array of the top 5 most relevant articles with their scores."},
-                {"role": "user", "content": prompt}
-            ],
-            max_tokens=500,
-            temperature=0
-        )
-        
-        scores = json.loads(response.choices[0].message.content.strip())
-        
-        # top 5 articles
-        analyzed_news = []
-        for score_obj in scores:
-            article_idx = score_obj['article'] - 1  
-            news = news_items[article_idx]
-            analyzed_news.append(NewsItem(
-                title=news['title'],
-                link=news['link'],
-                published_date=news['published_date'],
-                summary=news['summary'],
-                relevance_score=score_obj['score']
-            ))
-        
-        return analyzed_news
-        
-    except Exception as e:
-        print("Error analyzing news batch: {}".format(e))
-        return [] 

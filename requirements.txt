@@ -1,11 +1,66 @@
-pandas>=1.5.0
-requests>=2.28.0
-sodapy>=2.2.0
-pymongo>=4.3.0
-python-dotenv>=0.21.0
-matplotlib>=3.5.0
-contextily==1.6.2
-scikit-learn==1.6.1
-imblearn==0.0
-google-generative-ai==0.8.5
-fastapi==0.95.1
+# Data processing and analysis
+pandas==2.2.0
+numpy==1.26.3
+scikit-learn==1.4.0
+scipy==1.15.3
+
+# MongoDB
+pymongo==4.13.0
+motor==3.7.1
+dnspython==2.7.0
+
+# API and web
+fastapi==0.109.0
+uvicorn[standard]==0.27.0
+python-dotenv==1.0.0
+requests==2.31.0
+openai==0.28.1
+aiohttp==3.12.9
+httpx==0.28.1
+starlette==0.35.1
+
+# Web scraping and parsing
+beautifulsoup4==4.13.4
+soupsieve==2.7
+bs4==0.0.2
+
+# Data visualization
+matplotlib==3.8.2
+contourpy==1.3.2
+cycler==0.12.1
+fonttools==4.58.1
+kiwisolver==1.4.8
+pillow==11.2.1
+pyparsing==3.2.3
+
+# Data collection
+sodapy==2.2.0
+
+# Additional utilities
+python-dateutil==2.8.2
+tqdm==4.66.1
+pydantic==2.11.5
+pydantic-core==2.33.2
+annotated-types==0.7.0
+typing-extensions==4.14.0
+pytz==2025.2
+tzdata==2025.2
+six==1.17.0
+packaging==25.0
+
+# Async support
+anyio==4.9.0
+sniffio==1.3.1
+aiohappyeyeballs==2.6.1
+aiosignal==1.3.2
+frozenlist==1.6.2
+multidict==6.4.4
+yarl==1.20.0
+propcache==0.3.1
+
+# Server dependencies
+uvloop==0.21.0
+httptools==0.6.4
+watchfiles==1.0.5
+websockets==15.0.1
+PyYAML==6.0.2
